@@ -22,7 +22,7 @@ function formatDateLabel(isoDate: string) {
 }
 
 async function sendConfirmationEmail(booking: typeof bookings.$inferSelect) {
-  const apiKey = Netlify.env.get("RESEND_API_KEY");
+  const apiKey = Netlify.env.get("re_EpajwWx4_D5n4y9X7EFhczbBoCZ6RTszo");
   if (!apiKey) {
     console.warn("RESEND_API_KEY is not set — skipping booking confirmation email.");
     return;
