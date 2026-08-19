@@ -207,7 +207,6 @@
   const DEFAULT_ADMIN_PASSWORD = 'Admin1234';
   const DEFAULT_VIEWER_PIN     = '1234';
 
-  const MAX_PER_SLOT = 4;
   const BOOKING_WINDOW_DAYS = 30; // how far ahead the calendar allows bookings
   const SLOT_START = 8 * 60;
   const SLOT_END   = 22 * 60;
@@ -673,9 +672,10 @@ function renderSlots() {
     });
     const count = slotBks.length;
     const booked = count > 0;
-    const full = count >= MAX_PER_SLOT;
+    // The court is booked exclusively, so a single booking takes the whole slot.
+    const full = booked;
     if (!booked) openCount++;
-    const pct = Math.round((count / MAX_PER_SLOT) * 100);
+    const pct = booked ? 100 : 0;
     const row = document.createElement('div');
     row.className = 'slot-row slot-viewer' + (booked ? ' slot-full' : '');
     row.style.cursor = 'default';
