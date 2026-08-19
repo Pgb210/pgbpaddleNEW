@@ -546,16 +546,16 @@ async function insertBooking(booking) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(booking)
     });
+    const result = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const result = await res.json().catch(() => ({}));
       throw new Error(result.error || 'Could not save booking.');
     }
     await fetchBookings();
-    return true;
+    return { ok: true, emailSent: result.email_sent === true };
   } catch(e) {
     console.error('Insert error:', e);
     showToast(`❌ ${e.message || 'Could not save booking. Please try again.'}`);
-    return false;
+    return { ok: false, emailSent: false };
   }
 }
 
@@ -817,9 +817,11 @@ async function submitBooking() {
     slot_time: startTime,
     end_time:  endTime
   };
-  const ok = await insertBooking(booking);
-  if (ok) {
-    showToast('✅ Booking saved successfully — confirmation email sent');
+  const result = await insertBooking(booking);
+  if (result.ok) {
+    showToast(result.emailSent
+      ? '✅ Booking saved successfully — confirmation email sent'
+      : '✅ Booking saved successfully — confirmation email could not be sent');
     clearForm();
     renderAll();
   }
