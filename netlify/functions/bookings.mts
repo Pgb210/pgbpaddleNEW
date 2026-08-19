@@ -21,11 +21,11 @@ function formatDateLabel(isoDate: string) {
   });
 }
 
-async function sendConfirmationEmail(booking: typeof bookings.$inferSelect) {
-  const apiKey = Netlify.env.get("re_T8UrfBPk_Kvym7TrQBnWZ4qfJ4ZxZtZBk");
+async function sendConfirmationEmail(booking: typeof bookings.$inferSelect): Promise<boolean> {
+  const apiKey = Netlify.env.get("RESEND_API_KEY");
   if (!apiKey) {
     console.warn("RESEND_API_KEY is not set — skipping booking confirmation email.");
-    return;
+    return false;
   }
 
   const fromEmail = Netlify.env.get("BOOKING_CONFIRMATION_FROM_EMAIL") || "onboarding@resend.dev";
@@ -56,9 +56,13 @@ async function sendConfirmationEmail(booking: typeof bookings.$inferSelect) {
 
     if (!res.ok) {
       console.error("Failed to send booking confirmation email", await res.text());
+      return false;
     }
+
+    return true;
   } catch (error) {
     console.error("Booking confirmation email error", error);
+    return false;
   }
 }
 
@@ -115,9 +119,9 @@ export default async (request: Request, context: Context) => {
         endTime,
       }).returning();
 
-      context.waitUntil(sendConfirmationEmail(created));
+      const emailSent = await sendConfirmationEmail(created);
 
-      return json(serializeBooking(created), 201);
+      return json({ ...serializeBooking(created), email_sent: emailSent }, 201);
     }
 
     if (request.method === "DELETE") {
