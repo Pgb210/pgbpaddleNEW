@@ -341,10 +341,6 @@
               <label>Email address</label>
               <input type="email" id="emailInput" placeholder="e.g. aoife@pgbsports.com" />
             </div>
-            <div class="form-group">
-              <label>Team / Department <span style="font-weight:400;text-transform:none;letter-spacing:0;">(optional)</span></label>
-              <input type="text" id="teamInput" placeholder="e.g. Marketing" />
-            </div>
             <button class="btn-book" id="bookBtn" onclick="submitBooking()">Confirm booking</button>
           </div>
         </div>
@@ -703,7 +699,7 @@ function renderBookingsPanel() {
   body.innerHTML = `
     <table class="bookings-table">
       <thead><tr>
-        <th>Time</th><th>Name</th><th>Team</th>
+        <th>Time</th><th>Name</th>
         ${isAdmin ? '<th>Email</th><th></th>' : ''}
       </tr></thead>
       <tbody>
@@ -715,7 +711,6 @@ function renderBookingsPanel() {
           <tr>
             <td style="font-family:var(--mono);font-size:12px;">${timeLabel}</td>
             <td style="font-weight:500;">${escHtml(b.name)}</td>
-            <td style="color:var(--muted);">${escHtml(b.team||'—')}</td>
             ${isAdmin ? `<td style="color:var(--muted);font-size:12px;">${escHtml(b.email||'—')}</td><td><button class="btn-cancel" onclick="deleteBooking('${b.id}')">Cancel</button></td>` : ''}
           </tr>`;
         }).join('')}
@@ -788,7 +783,6 @@ function clearForm() {
   if (currentRole === 'viewer') return;
   document.getElementById('nameInput').value = '';
   document.getElementById('emailInput').value = '';
-  document.getElementById('teamInput').value = '';
   document.getElementById('bookingPreview').style.display = 'none';
   document.getElementById('clashWarning').style.display = 'none';
   document.getElementById('bookBtn').disabled = false;
@@ -807,12 +801,11 @@ async function submitBooking() {
   if (endMins <= startMins) { showToast('Please select a valid end time'); return; }
   if (checkClash(startMins, endMins)) { showToast('This time range clashes with an existing booking'); return; }
 
-  const team = document.getElementById('teamInput').value.trim();
-  const btn  = document.getElementById('bookBtn');
+  const btn = document.getElementById('bookBtn');
   btn.disabled = true; btn.textContent = 'Saving…';
 
   const booking = {
-    name, email, team,
+    name, email,
     booking_date: dateStr(selectedDate),
     slot_time: startTime,
     end_time:  endTime

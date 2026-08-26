@@ -47,7 +47,6 @@ async function sendConfirmationEmail(booking: typeof bookings.$inferSelect): Pro
           <ul>
             <li><strong>Date:</strong> ${formatDateLabel(booking.bookingDate)}</li>
             <li><strong>Time:</strong> ${booking.slotTime} – ${booking.endTime}</li>
-            ${booking.team ? `<li><strong>Team:</strong> ${booking.team}</li>` : ""}
           </ul>
           <p>See you on the court!</p>
         `,
@@ -71,7 +70,6 @@ function serializeBooking(booking: typeof bookings.$inferSelect) {
     id: booking.id,
     name: booking.name,
     email: booking.email,
-    team: booking.team,
     booking_date: booking.bookingDate,
     slot_time: booking.slotTime,
     end_time: booking.endTime,
@@ -89,7 +87,6 @@ export default async (request: Request, context: Context) => {
       const body = await request.json();
       const name = typeof body.name === "string" ? body.name.trim() : "";
       const email = typeof body.email === "string" ? body.email.trim() : "";
-      const team = typeof body.team === "string" ? body.team.trim() : "";
       const bookingDate = typeof body.booking_date === "string" ? body.booking_date : "";
       const slotTime = typeof body.slot_time === "string" ? body.slot_time : "";
       const endTime = typeof body.end_time === "string" ? body.end_time : "";
@@ -113,7 +110,6 @@ export default async (request: Request, context: Context) => {
       const [created] = await db.insert(bookings).values({
         name,
         email,
-        team,
         bookingDate,
         slotTime,
         endTime,
