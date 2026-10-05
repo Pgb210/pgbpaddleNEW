@@ -1,0 +1,60 @@
+[data-pwa-install][hidden] { display: none; }
+body { min-height: 100dvh; }
+#loginScreen {
+  min-height: 100dvh;
+  padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+}
+header {
+  height: calc(64px + env(safe-area-inset-top));
+  padding-top: env(safe-area-inset-top);
+  padding-left: max(2rem, env(safe-area-inset-left));
+  padding-right: max(2rem, env(safe-area-inset-right));
+}
+.container {
+  padding-bottom: max(2rem, env(safe-area-inset-bottom));
+  padding-left: max(1.5rem, env(safe-area-inset-left));
+  padding-right: max(1.5rem, env(safe-area-inset-right));
+}
+.toast { bottom: calc(2rem + env(safe-area-inset-bottom)); }
+.pwa-install {
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.pwa-install-login { width: 100%; margin-top: 16px; color: var(--green-dark); background: var(--green-light); border: 1px solid var(--border); }
+.pwa-install-header { color: #fff; background: transparent; border: 1px solid rgba(255,255,255,0.35); }
+.pwa-install:hover { filter: brightness(0.95); }
+.pwa-install:focus-visible { outline: 2px solid var(--green-mid); outline-offset: 3px; }
+.pwa-install:disabled { cursor: wait; opacity: 0.6; }
+.pwa-help {
+  margin: auto;
+  width: min(400px, calc(100% - 2rem));
+  max-height: calc(100dvh - 2rem);
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  color: var(--text);
+  background: var(--card);
+  font-family: var(--sans);
+}
+.pwa-help::backdrop { background: rgba(15,80,64,0.6); }
+.pwa-help h2 { font-size: 20px; margin-bottom: 12px; }
+.pwa-help p { font-size: 14px; line-height: 1.6; margin-bottom: 16px; }
+@media (max-width: 768px) {
+  header {
+    height: auto;
+    min-height: calc(64px + env(safe-area-inset-top));
+    padding: calc(12px + env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) 12px max(1rem, env(safe-area-inset-left));
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .header-right { flex-wrap: wrap; gap: 8px; }
+  .container {
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+  }
+  .login-form-group input, .form-group input, .form-group select { font-size: 16px; }
+}
