@@ -2,8 +2,16 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>PGB Sports — Paddle Court Booking</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#0f5040" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="PGB Padel Booking" />
+<title>PGB Padel Booking</title>
+<link rel="manifest" href="/manifest.webmanifest" />
+<link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
 <style>
@@ -197,6 +205,8 @@
   .config-banner strong { display: block; margin-bottom: 4px; font-size: 14px; }
   .config-banner code { background: #fef3c7; padding: 1px 5px; border-radius: 3px; font-family: var(--mono); font-size: 12px; }
 </style>
+<link rel="stylesheet" href="/pwa.css" />
+<script src="/pwa.js" defer></script>
 </head>
 <body>
 
@@ -262,6 +272,7 @@
       <div class="login-error" id="viewerError">Incorrect PIN. Please try again.</div>
       <button class="btn-login" onclick="loginViewer()">View Bookings</button>
     </div>
+    <button type="button" class="pwa-install pwa-install-login" data-pwa-install hidden>Install app</button>
   </div>
 </div>
 
@@ -276,6 +287,7 @@
       </div>
     </div>
     <div class="header-right">
+      <button type="button" class="pwa-install pwa-install-header" data-pwa-install hidden>Install app</button>
       <span class="header-role" id="roleLabel">Viewer</span>
       <button class="btn-logout" onclick="logout()">Log out</button>
     </div>
@@ -392,6 +404,13 @@
 </div>
 
 <div class="toast" id="toast"></div>
+
+<dialog id="pwaInstallHelp" class="pwa-help" aria-labelledby="pwaHelpTitle" aria-describedby="pwaHelpText">
+  <h2 id="pwaHelpTitle">Install PGB Padel Booking</h2>
+  <p id="pwaHelpText">In Safari, open the Share menu, select <strong>Add to Home Screen</strong>, keep <strong>Open as Web App</strong> enabled if shown, then tap <strong>Add</strong>. If this option is missing, open this page directly in Safari.</p>
+  <p>Launch from your home screen for the standalone app. A connection is required to view and manage bookings.</p>
+  <form method="dialog"><button class="btn-login" type="submit">Got it</button></form>
+</dialog>
 
 <script>
 // ═══ State ═══
