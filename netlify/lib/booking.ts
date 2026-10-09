@@ -25,8 +25,8 @@ export function validateBooking(body: Record<string, unknown>, publicRequest = f
     const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Dublin", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
     const lastDate = new Date(`${today}T00:00:00Z`);
     lastDate.setUTCDate(lastDate.getUTCDate() + 29);
-    if (bookingDate < today || bookingDate > lastDate.toISOString().slice(0, 10) || slotTime < "08:00" || endTime > "22:00" || !/:(00|30)$/.test(slotTime) || !/:(00|30)$/.test(endTime) || body.court !== courtName) {
-      throw new ApiError(400, "Choose this court, an available date within 30 days, and times between 8 AM and 10 PM in half-hour steps.");
+    if (bookingDate < today || bookingDate > lastDate.toISOString().slice(0, 10) || slotTime < "07:00" || endTime > "23:00" || !/:(00|30)$/.test(slotTime) || !/:(00|30)$/.test(endTime) || body.court !== courtName) {
+      throw new ApiError(400, "Choose this court, an available date within 30 days, and times between 7 AM and 11 PM in half-hour steps.");
     }
   }
   return { name, email, bookingDate, slotTime, endTime };

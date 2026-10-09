@@ -1,7 +1,8 @@
 # Public booking requests
 
 The home page is public and shows the existing single PGB Padel Court, its next
-30 bookable dates, and available half-hour times between 08:00 and 22:00. Public
+30 bookable dates, and available half-hour start times from 07:00 through 22:30,
+with bookings ending no later than 23:00. Public
 visitors submit their name, email, and optional phone number. Every submission
 is saved as `PENDING`; it never creates a confirmed booking or reserves a slot.
 Dates in the public booking window follow the club's Europe/Dublin time zone.
