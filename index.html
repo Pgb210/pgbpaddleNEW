@@ -93,6 +93,23 @@
     font-weight: 600; cursor: pointer; transition: background 0.15s;
   }
   .btn-login:hover { background: var(--green); }
+  .public-entry { margin-top: 16px; background: var(--green-light); color: var(--green-dark); }
+  .request-note { padding: 12px 14px; border-left: 3px solid var(--amber); background: #fff9ec; color: #705019; font-size: 13px; line-height: 1.6; margin-bottom: 18px; }
+  .request-success { background: var(--green-light); color: var(--green-dark); border-radius: 8px; padding: 16px; margin-bottom: 16px; line-height: 1.6; }
+  .pending-item { padding: 18px 20px; border-bottom: 1px solid var(--border); }
+  .pending-item:last-child { border-bottom: 0; }
+  .pending-item h3 { font-size: 15px; margin-bottom: 6px; }
+  .pending-meta { font-size: 13px; color: var(--muted); line-height: 1.7; overflow-wrap: anywhere; }
+  .pending-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+  .pending-actions button { font-family: var(--sans); border-radius: 6px; padding: 8px 14px; cursor: pointer; border: 1px solid var(--border); background: white; }
+  .pending-actions .approve { background: var(--green-dark); border-color: var(--green-dark); color: white; }
+  .pending-actions .reject { color: var(--red); }
+  .pending-actions button:disabled { cursor: wait; opacity: .55; }
+  .pending-alert { background: #fff9ec; border: 1px solid #edce8d; border-radius: 8px; padding: 14px 18px; color: #705019; font-size: 13px; }
+  .email-warning { color: #9a6107; margin-top: 6px; font-size: 12px; }
+  .slot-selectable:hover { background: var(--green-light); }
+  .slot-selectable:focus-visible { outline: 2px solid var(--green); outline-offset: -2px; }
+  .honeypot { position: absolute; left: -10000px; }
 
   /* ── App ── */
   #appScreen { display: none; }
@@ -212,15 +229,12 @@
 
 <!-- ═══════════════════ CONFIGURATION ═══════════════════ -->
 <script>
-  // Default credentials
-  const DEFAULT_ADMIN_EMAIL    = 'admin@pgbsports.com';
-  const DEFAULT_ADMIN_PASSWORD = 'Admin1234';
-  const DEFAULT_VIEWER_PIN     = '1234';
 
   const BOOKING_WINDOW_DAYS = 30; // how far ahead the calendar allows bookings
   const SLOT_START = 8 * 60;
   const SLOT_END   = 22 * 60;
   const SLOT_STEP  = 30;
+  const MAX_REQUEST_DURATION = 120;
 
   function minsToTime(m) {
     const h = Math.floor(m / 60), min = m % 60;
@@ -267,11 +281,12 @@
     <div id="viewerLoginForm" style="display:none;">
       <div class="login-form-group">
         <label>Viewer PIN</label>
-        <input type="password" id="viewerPin" placeholder="Enter PIN" maxlength="10" inputmode="numeric" />
+        <input type="password" id="viewerPin" placeholder="Enter PIN" maxlength="256" inputmode="numeric" />
       </div>
       <div class="login-error" id="viewerError">Incorrect PIN. Please try again.</div>
       <button class="btn-login" onclick="loginViewer()">View Bookings</button>
     </div>
+    <button type="button" class="btn-login public-entry" onclick="openPublic()">Browse availability & request a booking</button>
     <button type="button" class="pwa-install pwa-install-login" data-pwa-install hidden>Install app</button>
   </div>
 </div>
@@ -289,7 +304,7 @@
     <div class="header-right">
       <button type="button" class="pwa-install pwa-install-header" data-pwa-install hidden>Install app</button>
       <span class="header-role" id="roleLabel">Viewer</span>
-      <button class="btn-logout" onclick="logout()">Log out</button>
+      <button class="btn-logout" id="accountButton" onclick="openLogin()">Staff login</button>
     </div>
   </header>
 
@@ -322,22 +337,30 @@
 
     <!-- RIGHT: form + bookings + settings -->
     <div class="right-panel">
+      <div class="pending-alert" id="pendingAlert" role="status" aria-live="polite" hidden></div>
+      <div class="card" id="pendingCard" style="display:none;">
+        <div class="card-header"><span class="card-title">Pending Requests</span><span class="pill-count" id="pendingCount">0</span></div>
+        <div id="pendingBody"><div class="state-msg">Loading requests…</div></div>
+      </div>
 
       <!-- Booking form (admin only) -->
       <div class="card" id="bookingCard">
-        <div class="card-header"><span class="card-title">Book the court</span></div>
+        <div class="card-header"><span class="card-title" id="bookingTitle">Request a booking</span></div>
         <div class="card-body">
+          <div class="request-note" id="requestNote">Choose a time and send a request, from 30 minutes up to a maximum of 2 hours. <strong>This is not a confirmed booking.</strong> An admin needs to approve it. Pending requests do not reserve the court.</div>
+          <div class="request-success" id="requestSuccess" role="status" tabindex="-1" hidden></div>
           <div id="viewerNotice" class="viewer-notice" style="display:none;">
             🔒 You are in view-only mode. Log in as Admin to make bookings.
           </div>
           <div id="bookForm">
+            <div class="form-group"><label for="courtInput">Court</label><select id="courtInput"><option>PGB Padel Court</option></select></div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
               <div class="form-group" style="margin-bottom:0;">
-                <label>Start time</label>
+                <label for="startTimeInput">Start time</label>
                 <select id="startTimeInput" onchange="onTimeChange()"></select>
               </div>
               <div class="form-group" style="margin-bottom:0;">
-                <label>End time</label>
+                <label for="endTimeInput">End time</label>
                 <select id="endTimeInput" onchange="onTimeChange()"></select>
               </div>
             </div>
@@ -346,20 +369,22 @@
               ⚠️ This time range overlaps with an existing booking. Please choose a different time.
             </div>
             <div class="form-group">
-              <label>Your full name</label>
-              <input type="text" id="nameInput" placeholder="e.g. Aoife Murphy" autocomplete="name" />
+              <label for="nameInput">Your full name</label>
+              <input type="text" id="nameInput" placeholder="e.g. Aoife Murphy" autocomplete="name" maxlength="150" required />
             </div>
             <div class="form-group">
-              <label>Email address</label>
-              <input type="email" id="emailInput" placeholder="e.g. aoife@pgbsports.com" />
+              <label for="emailInput">Email address</label>
+              <input type="email" id="emailInput" placeholder="e.g. aoife@pgbsports.com" autocomplete="email" maxlength="254" required />
             </div>
+            <div class="form-group" id="phoneGroup"><label for="phoneInput">Phone number <span style="color:var(--muted);font-weight:400;">(optional)</span></label><input type="tel" id="phoneInput" autocomplete="tel" maxlength="40" /></div>
+            <div class="honeypot" aria-hidden="true"><label for="websiteInput">Leave this field blank</label><input id="websiteInput" autocomplete="off" tabindex="-1" /></div>
             <button class="btn-book" id="bookBtn" onclick="submitBooking()">Confirm booking</button>
           </div>
         </div>
       </div>
 
       <!-- Bookings panel -->
-      <div class="card">
+      <div class="card" id="bookingsCard">
         <div class="card-header">
           <span class="card-title">All bookings — <span id="bookingsDateLabel">today</span></span>
           <span class="pill-count" id="bookingsCount">0</span>
@@ -403,7 +428,7 @@
   </div>
 </div>
 
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <dialog id="pwaInstallHelp" class="pwa-help" aria-labelledby="pwaHelpTitle" aria-describedby="pwaHelpText">
   <h2 id="pwaHelpTitle">Install PGB Padel Booking</h2>
@@ -421,7 +446,11 @@ let minDate = null;        // first bookable day (today)
 let maxDate = null;        // last bookable day (today + BOOKING_WINDOW_DAYS - 1)
 let selectedSlotIdx = null;
 let allBookings = [];
-let appSettings = { admin_email: DEFAULT_ADMIN_EMAIL, admin_password: DEFAULT_ADMIN_PASSWORD, viewer_pin: DEFAULT_VIEWER_PIN };
+let pendingRequests = [];
+let knownPendingIds = null;
+let refreshTimer = null;
+let availabilityLoaded = false;
+let submittingBooking = false;
 
 // ═══ Helpers ═══
 function fmt(d) { return d.toLocaleDateString('en-IE', { weekday: 'short', day: 'numeric', month: 'short' }); }
@@ -453,33 +482,54 @@ function switchLoginTab(tab) {
 async function loginAdmin() {
   const email = document.getElementById('adminEmail').value.trim();
   const pass  = document.getElementById('adminPassword').value;
-  await loadSettings();
-  if (email === appSettings.admin_email && pass === appSettings.admin_password) {
-    currentRole = 'admin';
-    showApp();
-  } else {
-    document.getElementById('adminError').style.display = 'block';
-  }
+  await loginStaff('admin', email, pass, 'adminError');
 }
 
 async function loginViewer() {
   const pin = document.getElementById('viewerPin').value.trim();
-  await loadSettings();
-  if (pin === appSettings.viewer_pin) {
-    currentRole = 'viewer';
+  await loginStaff('viewer', '', pin, 'viewerError');
+}
+
+async function loginStaff(role, email, password, errorId) {
+  const error = document.getElementById(errorId);
+  error.style.display = 'none';
+  try {
+    await api('/api/session', { method: 'POST', body: JSON.stringify({ role, email, password }) });
+    currentRole = role;
+    clearLoginFields();
     showApp();
-  } else {
-    document.getElementById('viewerError').style.display = 'block';
+  } catch (failure) {
+    error.textContent = failure.message;
+    error.style.display = 'block';
   }
 }
 
-function logout() {
-  currentRole = null;
-  document.getElementById('appScreen').style.display = 'none';
-  document.getElementById('loginScreen').style.display = 'flex';
+function clearLoginFields() {
   document.getElementById('adminEmail').value = '';
   document.getElementById('adminPassword').value = '';
   document.getElementById('viewerPin').value = '';
+}
+
+async function logout() {
+  try {
+    await api('/api/session', { method: 'DELETE' });
+    clearLoginFields();
+    openPublic();
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+function openLogin() {
+  if (currentRole !== 'public') { logout(); return; }
+  clearInterval(refreshTimer);
+  document.getElementById('appScreen').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+}
+
+function openPublic() {
+  currentRole = 'public';
+  showApp();
 }
 
 function showApp() {
@@ -487,6 +537,20 @@ function showApp() {
   document.getElementById('appScreen').style.display = 'block';
 
   const roleLabel = document.getElementById('roleLabel');
+  const isAdmin = currentRole === 'admin';
+  const isPublic = currentRole === 'public';
+  allBookings = [];
+  availabilityLoaded = false;
+  pendingRequests = [];
+  knownPendingIds = null;
+  document.getElementById('pendingCard').style.display = isAdmin ? 'block' : 'none';
+  document.getElementById('pendingAlert').hidden = true;
+  document.getElementById('bookingsCard').style.display = isPublic ? 'none' : 'block';
+  document.getElementById('requestNote').style.display = isPublic ? 'block' : 'none';
+  document.getElementById('phoneGroup').style.display = isPublic ? 'block' : 'none';
+  document.getElementById('bookingTitle').textContent = isPublic ? 'Request a booking' : 'Book the court';
+  document.getElementById('bookBtn').textContent = isPublic ? 'Submit booking request' : 'Confirm booking';
+  document.getElementById('accountButton').textContent = isPublic ? 'Staff login' : 'Log out';
   if (currentRole === 'admin') {
     roleLabel.textContent = 'Admin';
     roleLabel.className = 'header-role admin';
@@ -494,30 +558,36 @@ function showApp() {
     document.getElementById('viewerNotice').style.display = 'none';
     document.getElementById('bookForm').style.display = 'block';
   } else {
-    roleLabel.textContent = 'Viewer';
+    roleLabel.textContent = isPublic ? 'Public requests' : 'Viewer';
     roleLabel.className = 'header-role';
     document.getElementById('settingsCard').style.display = 'none';
-    document.getElementById('viewerNotice').style.display = 'block';
-    document.getElementById('bookForm').style.display = 'none';
+    document.getElementById('viewerNotice').style.display = isPublic ? 'none' : 'block';
+    document.getElementById('bookForm').style.display = isPublic ? 'block' : 'none';
   }
 
-  if (!selectedDate) initDates();
+  initDates();
 
   renderAll();
-  populateTimeDropdowns();
+  clearForm();
 
+  clearInterval(refreshTimer);
   fetchBookings();
-  setInterval(fetchBookings, 30000);
+  if (isAdmin) fetchPendingRequests();
+  refreshTimer = setInterval(() => {
+    fetchBookings();
+    if (currentRole === 'admin') fetchPendingRequests();
+  }, 30000);
 }
 
 // ═══ Settings ═══
-async function loadSettings() {
-  return appSettings;
-}
-
 async function saveSettings(updates) {
-  appSettings = { ...appSettings, ...updates };
-  return true;
+  try {
+    await api('/api/session', { method: 'PATCH', body: JSON.stringify(updates) });
+    return true;
+  } catch (error) {
+    showToast(error.message);
+    return false;
+  }
 }
 
 async function saveAdminCreds() {
@@ -542,17 +612,89 @@ function showSaveMsg(id) {
 }
 
 // ═══ Booking API ═══
+async function api(path, options = {}) {
+  const response = await fetch(path, { ...options, headers: { 'Content-Type': 'application/json', ...options.headers }, cache: 'no-store' });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.error || 'Could not complete this request. Please try again.');
+  return body;
+}
+
 async function fetchBookings() {
+  const role = currentRole;
   try {
     const res = await fetch('/api/bookings');
     if (!res.ok) throw new Error(`fetch failed (${res.status})`);
-    allBookings = await res.json();
+    const rows = await res.json();
+    if (currentRole !== role) return;
+    allBookings = rows;
+    availabilityLoaded = true;
     renderAll();
+    if (currentRole === 'public') populateTimeDropdowns(true);
+    if (currentRole !== 'viewer') onTimeChange();
   } catch(e) {
-    console.error('Fetch error:', e);
+    if (currentRole !== role) return;
+    availabilityLoaded = false;
+    document.getElementById('bookBtn').disabled = true;
+    document.getElementById('slotsList').innerHTML = '<div class="state-msg">Availability could not be loaded. Please refresh before booking.</div>';
     showToast('❌ Could not load bookings. Please refresh.');
   }
 }
+
+async function fetchPendingRequests() {
+  if (currentRole !== 'admin') return;
+  try {
+    const rows = await api('/api/booking-requests');
+    if (currentRole !== 'admin') return;
+    const newRequests = knownPendingIds && rows.filter(request => !knownPendingIds.has(request.id));
+    pendingRequests = rows;
+    knownPendingIds = new Set(rows.map(request => request.id));
+    renderPendingRequests();
+    if (newRequests && newRequests.length) showToast(`${newRequests.length} new booking request${newRequests.length === 1 ? '' : 's'} awaiting approval`);
+  } catch (error) {
+    if (currentRole !== 'admin') return;
+    document.getElementById('pendingBody').innerHTML = `<div class="state-msg">${escHtml(error.message)} <button type="button" class="btn-save" onclick="fetchPendingRequests()">Retry</button></div>`;
+  }
+}
+
+function renderPendingRequests() {
+  document.getElementById('pendingCount').textContent = pendingRequests.length;
+  const alert = document.getElementById('pendingAlert');
+  alert.hidden = !pendingRequests.length;
+  alert.textContent = `${pendingRequests.length} booking request${pendingRequests.length === 1 ? '' : 's'} awaiting your review. Requests do not reserve the court.`;
+  const body = document.getElementById('pendingBody');
+  if (!pendingRequests.length) { body.innerHTML = '<div class="state-msg">All caught up — no pending requests.</div>'; return; }
+  body.innerHTML = pendingRequests.map(request => `
+    <article class="pending-item">
+      <h3>${escHtml(request.name)} <span class="pill-count">PENDING</span></h3>
+      <div class="pending-meta">${escHtml(request.court)} · ${escHtml(request.bookingDate)}<br>
+      ${minsToLabel(timeToMins(request.slotTime))} – ${minsToLabel(timeToMins(request.endTime))}<br>
+      ${escHtml(request.email)}${request.phone ? ' · ' + escHtml(request.phone) : ''}</div>
+      ${request.notificationSent ? '' : '<p class="email-warning">Admin email was not delivered. Check email configuration or retry.</p>'}
+      <div class="pending-actions">
+        <button type="button" class="approve" data-request-id="${request.id}" data-action="approve">Approve</button>
+        <button type="button" class="reject" data-request-id="${request.id}" data-action="reject">Reject</button>
+        ${request.notificationSent ? '' : `<button type="button" data-request-id="${request.id}" data-action="notify">Retry email notification</button>`}
+      </div>
+    </article>`).join('');
+}
+
+document.getElementById('pendingBody').addEventListener('click', async event => {
+  const button = event.target.closest('button[data-request-id]');
+  if (!button || currentRole !== 'admin') return;
+  const buttons = button.closest('.pending-actions').querySelectorAll('button');
+  buttons.forEach(control => control.disabled = true);
+  try {
+    const result = await api('/api/booking-requests', { method: 'PATCH', body: JSON.stringify({ id: button.dataset.requestId, action: button.dataset.action }) });
+    if (button.dataset.action === 'notify') showToast(result.notification_sent ? 'Admin notification email sent' : 'Email could not be sent. Check email configuration.');
+    else if (result.status === 'APPROVED') showToast(result.email_sent ? 'Request approved — booking confirmed and email sent' : 'Request approved — booking confirmed, but confirmation email was not sent');
+    else showToast('Request rejected — the slot remains available unless separately booked');
+  } catch (error) {
+    showToast(error.message);
+  } finally {
+    await Promise.all([fetchBookings(), fetchPendingRequests()]);
+    buttons.forEach(control => control.disabled = false);
+  }
+});
 
 async function insertBooking(booking) {
   try {
@@ -589,7 +731,8 @@ async function deleteBooking(id) {
 
 // ═══ Dates ═══
 function initDates() {
-  minDate = startOfDay(new Date());
+  const clubDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Dublin', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  minDate = currentRole === 'public' ? new Date(`${clubDate}T00:00:00`) : startOfDay(new Date());
   maxDate = addDays(minDate, BOOKING_WINDOW_DAYS - 1);
   selectedDate = minDate;
   calendarMonth = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
@@ -611,7 +754,7 @@ function selectDate(d) {
   selectedSlotIdx = null;
   clearForm();
   renderAll();
-  if (currentRole === 'admin') populateTimeDropdowns();
+  if (currentRole !== 'viewer') populateTimeDropdowns();
 }
 
 // ═══ Render ═══
@@ -675,6 +818,11 @@ function getBookingsForDate(d) {
 
 function renderSlots() {
   const list = document.getElementById('slotsList');
+  if (!availabilityLoaded) {
+    list.innerHTML = '<div class="state-msg">Loading availability…</div>';
+    document.getElementById('openCount').textContent = '—';
+    return;
+  }
   const booksForDay = getBookingsForDate(selectedDate);
   let openCount = 0;
   list.innerHTML = '';
@@ -683,7 +831,7 @@ function renderSlots() {
       const bStart = timeToMins(b.slot_time);
       const bEnd = timeToMins(b.end_time || b.slot_time) + (b.end_time ? 0 : 30);
       const tMins = timeToMins(t);
-      return tMins >= bStart && tMins < bEnd;
+      return tMins < bEnd && tMins + SLOT_STEP > bStart;
     });
     const count = slotBks.length;
     const booked = count > 0;
@@ -702,6 +850,23 @@ function renderSlots() {
       </div>
       <span class="slot-badge ${booked?'badge-full':'badge-open'}">${booked?'Booked':'Open'}</span>
     `;
+    if (currentRole === 'public' && !booked) {
+      row.classList.add('slot-selectable');
+      row.style.cursor = 'pointer';
+      row.tabIndex = 0;
+      row.setAttribute('role', 'button');
+      row.setAttribute('aria-label', `Request ${minsToLabel(timeToMins(t))} on ${fmt(selectedDate)}`);
+      const chooseSlot = () => {
+        document.getElementById('startTimeInput').value = t;
+        updateEndTimes();
+        document.getElementById('endTimeInput').value = minsToTime(timeToMins(t) + SLOT_STEP);
+        onTimeChange();
+        document.getElementById('bookingCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        document.getElementById('nameInput').focus({ preventScroll: true });
+      };
+      row.onclick = chooseSlot;
+      row.onkeydown = event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); chooseSlot(); } };
+    }
     list.appendChild(row);
   });
   document.getElementById('openCount').textContent = openCount + ' open slots';
@@ -745,21 +910,30 @@ function renderAll() {
 }
 
 // ═══ Time dropdowns ═══
-function populateTimeDropdowns() {
+function populateTimeDropdowns(keepSelection = false) {
   const startSel = document.getElementById('startTimeInput');
   const endSel   = document.getElementById('endTimeInput');
   if (!startSel) return;
-  startSel.innerHTML = SLOT_TIMES.map(t => `<option value="${t}">${minsToLabel(timeToMins(t))}</option>`).join('');
+  const previousStart = startSel.value;
+  const previousEnd = endSel.value;
+  const publicMode = currentRole === 'public';
+  const available = SLOT_TIMES.filter(time => !publicMode || !checkClash(timeToMins(time), timeToMins(time) + SLOT_STEP));
+  startSel.innerHTML = available.length ? available.map(t => `<option value="${t}">${minsToLabel(timeToMins(t))}</option>`).join('') : '<option value="">No available times</option>';
+  if (keepSelection && available.includes(previousStart)) startSel.value = previousStart;
   updateEndTimes();
+  if (keepSelection && [...endSel.options].some(option => option.value === previousEnd)) endSel.value = previousEnd;
+  if (keepSelection && previousStart && !available.includes(previousStart)) showToast('Availability has changed. Please review your selected time before submitting.');
+  document.getElementById('bookBtn').disabled = !availabilityLoaded || !available.length || submittingBooking;
 }
 
 function updateEndTimes() {
   const startSel = document.getElementById('startTimeInput');
   const endSel   = document.getElementById('endTimeInput');
   if (!startSel || !endSel) return;
+  if (!startSel.value) { endSel.innerHTML = '<option value="">No available times</option>'; return; }
   const startMins = timeToMins(startSel.value);
   const endTimes = SLOT_TIMES.filter(t => timeToMins(t) > startMins);
-  const allEnds = [...endTimes, minsToTime(SLOT_END)];
+  const allEnds = [...endTimes, minsToTime(SLOT_END)].filter(time => currentRole !== 'public' || (timeToMins(time) - startMins <= MAX_REQUEST_DURATION && !checkClash(startMins, timeToMins(time))));
   const prevEnd = endSel.value;
   endSel.innerHTML = allEnds.map(t => `<option value="${t}">${minsToLabel(timeToMins(t))}</option>`).join('');
   if (allEnds.includes(prevEnd)) endSel.value = prevEnd;
@@ -770,6 +944,7 @@ function onTimeChange() {
   const startSel = document.getElementById('startTimeInput');
   const endSel   = document.getElementById('endTimeInput');
   if (!startSel || !endSel) return;
+  if (!startSel.value || !endSel.value) { document.getElementById('bookBtn').disabled = true; return; }
   const startMins = timeToMins(startSel.value);
   const endMins   = timeToMins(endSel.value);
   if (endMins <= startMins) return;
@@ -777,12 +952,13 @@ function onTimeChange() {
   const preview = document.getElementById('bookingPreview');
   const warning = document.getElementById('clashWarning');
   const clash   = checkClash(startMins, endMins);
+  const durationExceeded = currentRole === 'public' && endMins - startMins > MAX_REQUEST_DURATION;
 
   preview.style.display = 'block';
-  preview.innerHTML = `<strong>${minsToLabel(startMins)} – ${minsToLabel(endMins)}</strong>${fmt(selectedDate)} &nbsp;·&nbsp; ${endMins - startMins} mins`;
+  preview.innerHTML = `<strong>${minsToLabel(startMins)} – ${minsToLabel(endMins)}</strong>${fmt(selectedDate)} &nbsp;·&nbsp; ${endMins - startMins} mins${durationExceeded ? '<br>Booking requests cannot exceed 2 hours. Please choose a shorter time range.' : ''}`;
 
   warning.style.display = clash ? 'block' : 'none';
-  document.getElementById('bookBtn').disabled = clash;
+  document.getElementById('bookBtn').disabled = clash || durationExceeded || !availabilityLoaded || submittingBooking;
 }
 
 function checkClash(startMins, endMins) {
@@ -798,10 +974,13 @@ function checkClash(startMins, endMins) {
 // ═══ Form ═══
 function showForm() { /* no longer needed — form always visible for admin */ }
 
-function clearForm() {
+function clearForm(keepSuccess = false) {
   if (currentRole === 'viewer') return;
   document.getElementById('nameInput').value = '';
   document.getElementById('emailInput').value = '';
+  document.getElementById('phoneInput').value = '';
+  document.getElementById('websiteInput').value = '';
+  if (!keepSuccess) document.getElementById('requestSuccess').hidden = true;
   document.getElementById('bookingPreview').style.display = 'none';
   document.getElementById('clashWarning').style.display = 'none';
   document.getElementById('bookBtn').disabled = false;
@@ -809,18 +988,25 @@ function clearForm() {
 }
 
 async function submitBooking() {
+  if (currentRole !== 'admin' && currentRole !== 'public') return;
+  if (submittingBooking) return;
+  if (!availabilityLoaded) { showToast('Wait for availability to load before submitting.'); return; }
   const name      = document.getElementById('nameInput').value.trim();
   const email     = document.getElementById('emailInput').value.trim();
   const startTime = document.getElementById('startTimeInput').value;
   const endTime   = document.getElementById('endTimeInput').value;
   if (!name)  { highlight('nameInput');  return; }
   if (!email) { highlight('emailInput'); return; }
+  if (!document.getElementById('emailInput').checkValidity()) { highlight('emailInput'); showToast('Please enter a valid email address.'); return; }
+  if (!startTime || !endTime) { showToast('Choose an available time.'); return; }
   const startMins = timeToMins(startTime);
   const endMins   = timeToMins(endTime);
   if (endMins <= startMins) { showToast('Please select a valid end time'); return; }
+  if (currentRole === 'public' && endMins - startMins > MAX_REQUEST_DURATION) { showToast('Booking requests cannot exceed 2 hours. Please choose a shorter time range.'); return; }
   if (checkClash(startMins, endMins)) { showToast('This time range clashes with an existing booking'); return; }
 
   const btn = document.getElementById('bookBtn');
+  submittingBooking = true;
   btn.disabled = true; btn.textContent = 'Saving…';
 
   const booking = {
@@ -829,15 +1015,35 @@ async function submitBooking() {
     slot_time: startTime,
     end_time:  endTime
   };
-  const result = await insertBooking(booking);
-  if (result.ok) {
-    showToast(result.emailSent
-      ? '✅ Booking saved successfully — confirmation email sent'
-      : '✅ Booking saved successfully — confirmation email could not be sent');
-    clearForm();
-    renderAll();
+  const isPublic = currentRole === 'public';
+  try {
+    if (isPublic) {
+      await api('/api/booking-requests', { method: 'POST', body: JSON.stringify({ ...booking, court: document.getElementById('courtInput').value, phone: document.getElementById('phoneInput').value.trim(), website: document.getElementById('websiteInput').value }) });
+      const success = document.getElementById('requestSuccess');
+      success.textContent = 'Request received · PENDING. Your booking is not confirmed yet. An admin reviews your request and sends a confirmation email after approval. The court remains available until then.';
+      success.hidden = false;
+      clearForm(true);
+      success.focus();
+      showToast('Booking request submitted — awaiting admin approval');
+      await fetchBookings();
+    } else {
+      const result = await insertBooking(booking);
+      if (result.ok) {
+        showToast(result.emailSent
+          ? '✅ Booking saved successfully — confirmation email sent'
+          : '✅ Booking saved successfully — confirmation email could not be sent');
+        clearForm();
+        renderAll();
+      }
+    }
+  } catch (error) {
+    showToast(error.message);
+    await fetchBookings();
+  } finally {
+    submittingBooking = false;
+    btn.textContent = currentRole === 'public' ? 'Submit booking request' : 'Confirm booking';
+    onTimeChange();
   }
-  btn.disabled = false; btn.textContent = 'Confirm booking';
 }
 
 function highlight(id) {
@@ -850,6 +1056,13 @@ function highlight(id) {
 // Enter key support on login
 document.getElementById('adminPassword').addEventListener('keydown', e => { if (e.key === 'Enter') loginAdmin(); });
 document.getElementById('viewerPin').addEventListener('keydown', e => { if (e.key === 'Enter') loginViewer(); });
+openPublic();
+api('/api/session').then(session => {
+  if (session.role && currentRole === 'public' && document.getElementById('loginScreen').style.display === 'none') {
+    currentRole = session.role;
+    showApp();
+  }
+}).catch(() => {});
 </script>
 </body>
 </html>
