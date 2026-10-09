@@ -28,8 +28,16 @@ preview context, without putting their values in source control:
 - `VIEWER_PIN`: the existing viewer PIN, if Viewer access is needed.
 - `RESEND_API_KEY`: the existing email integration's API key.
 - `BOOKING_CONFIRMATION_FROM_EMAIL`: a sender authorized by the email provider.
-- `BOOKING_REQUEST_ADMIN_EMAIL`: the admin notification recipient (optional;
-  falls back to the saved admin email, then `ADMIN_EMAIL`).
+- `BOOKING_REQUEST_ADMIN_EMAILS`: optional comma-, semicolon-, or newline-separated
+  admin notification recipients. Whitespace and duplicate addresses are removed,
+  and each request sends one notification email addressed to the entire list.
+- `BOOKING_REQUEST_ADMIN_EMAIL`: the legacy single admin notification recipient
+  used when the plural setting is empty; falls back to the saved admin email,
+  then `ADMIN_EMAIL`.
+
+These settings affect only pending-request admin notifications. Customer booking
+confirmations keep their existing recipient, sender, subject, content, and
+idempotency key and are sent only for confirmed bookings.
 
 The first successful configuration-based login initializes the private settings
 record with hashed credentials. After that, the existing Admin Settings controls
