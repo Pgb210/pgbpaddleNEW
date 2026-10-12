@@ -612,6 +612,7 @@ document.getElementById('pendingBody').addEventListener('click', async event => 
     const result = await api('/api/booking-requests', { method: 'PATCH', body: JSON.stringify({ id: button.dataset.requestId, action: button.dataset.action }) });
     if (button.dataset.action === 'notify') showToast(result.notification_sent ? 'Admin notification email sent' : 'Email could not be sent. Check email configuration.');
     else if (result.status === 'APPROVED') showToast(result.email_sent ? 'Request approved — booking confirmed and email sent' : 'Request approved — booking confirmed, but confirmation email was not sent');
+    else if (result.status === 'REJECTED') showToast(result.email_sent ? 'Request rejected — the hold is released and rejection email sent' : 'Request rejected — the hold is released, but rejection email was not sent');
     else showToast(`Request ${result.status === 'CANCELLED' ? 'cancelled' : 'rejected'} — the hold is released`);
   } catch (error) {
     showToast(error.message);

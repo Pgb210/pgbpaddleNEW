@@ -33,6 +33,16 @@ export function sendConfirmationEmail(booking: typeof bookings.$inferSelect) {
   `, `confirmation-${booking.id}`);
 }
 
+export function sendRejectionEmail(bookingRequest: typeof bookingRequests.$inferSelect) {
+  return sendEmail(bookingRequest.email, "Your PGB Padel booking request was not approved", `
+    <p>Hi ${escapeHtml(bookingRequest.name)},</p>
+    <p>Your requested paddle court date and time were not approved:</p>
+    <ul><li><strong>Court:</strong> ${courtName}</li><li><strong>Date:</strong> ${formatDateLabel(bookingRequest.bookingDate)}</li>
+    <li><strong>Time:</strong> ${bookingRequest.slotTime} – ${bookingRequest.endTime}</li></ul>
+    <p>Your pending hold has been released. Please visit PGB Padel Booking to view available slots and submit another request.</p>
+  `, `rejection-${bookingRequest.id}`);
+}
+
 export async function sendRequestNotification(bookingRequest: typeof bookingRequests.$inferSelect) {
   const configuredRecipients = Netlify.env.get("BOOKING_REQUEST_ADMIN_EMAILS") || "";
   const recipients = [...new Set(configuredRecipients.split(/[,;\n]+/).map(recipient => recipient.trim().toLowerCase()).filter(Boolean))];

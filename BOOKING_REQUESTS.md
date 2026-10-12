@@ -42,9 +42,11 @@ preview context, without putting their values in source control:
   used when the plural setting is empty; falls back to the saved admin email,
   then `ADMIN_EMAIL`.
 
-These settings affect only pending-request admin notifications. Customer booking
-confirmations keep their existing recipient, sender, subject, content, and
-idempotency key and are sent only for confirmed bookings.
+The admin recipient settings affect only pending-request admin notifications.
+Rejection emails use the existing email integration and sender configuration and
+are addressed only to the requester. Customer booking confirmations keep their
+existing recipient, sender, subject, content, and idempotency key and are sent only
+for confirmed bookings.
 
 The first successful configuration-based login initializes the private settings
 record with hashed credentials. After that, the existing Admin Settings controls
@@ -101,7 +103,15 @@ and other repeated review actions are rejected.
 
 Reject marks the request `REJECTED`; Cancel request marks it `CANCELLED`. Both
 admin actions release the hold immediately without creating a booking or sending
-a confirmation email. Open pages refresh availability every 30 seconds, and the
+a confirmation email. After a rejection commits, the requester receives an email
+with their requested date and time, explaining that the request was not approved,
+the hold was released, and they can submit another request. Cancellation does not
+send this email. The existing locked, pending-only review transition allows only
+one rejection email attempt per request, including concurrent reviews. The email
+provider also receives a separate `rejection-<request ID>` idempotency key.
+Delivery failure does not undo the rejection or restore the hold; the admin sees
+whether the email was sent. Repeated review actions cannot resend it. No schema
+change or migration was needed. Open pages refresh availability every 30 seconds, and the
 acting admin's page refreshes immediately. Legacy overlapping pending requests
 continue to hold their ranges; an admin must reject or cancel the conflicting
 request before approving the other. Cancelling an approved booking uses the
@@ -124,7 +134,12 @@ authentication, and confirmation email content remain unchanged.
    approval and direct admin booking, and repeated review actions.
 5. Reject or cancel a pending request and verify that it creates no booking,
    sends no confirmation email, and immediately releases its hold for the next
-   API request. Check Public and Admin pending labels, unselectable held slots,
+   API request. Rejection sends exactly one requester email with the requested
+   date/time, released-hold explanation, and invitation to submit another request;
+   cancellation sends no requester email. Repeat and concurrently submit reject
+   actions and verify HTTP 409 for subsequent reviews and no extra emails. Test
+   email failure and verify the rejection and released hold persist, with a failed
+   delivery message in Admin. Check Public and Admin pending labels, unselectable held slots,
    and refreshed open-slot counts. Check existing admin booking cancellation.
 6. Verify notification failure/retry behavior, secure Admin login and logout,
    and the existing Admin credential settings control. Confirm that Viewer
