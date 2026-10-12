@@ -4,7 +4,7 @@ import { getDb } from "../../db/index.js";
 import { bookingRequests, bookings } from "../../db/schema.js";
 import { requireAdmin } from "../lib/auth.js";
 import { checkAvailability, lockDate, serializeBooking, validateBooking } from "../lib/booking.js";
-import { sendConfirmationEmail, sendRequestNotification } from "../lib/email.js";
+import { sendConfirmationEmail, sendRejectionEmail, sendRequestNotification } from "../lib/email.js";
 import { ApiError, checkOrigin, handleError, json, readBody } from "../lib/http.js";
 
 export default async (request: Request) => {
@@ -60,14 +60,14 @@ export default async (request: Request) => {
         if (body.action === "reject" || body.action === "cancel") {
           const status = body.action === "cancel" ? "CANCELLED" as const : "REJECTED" as const;
           await transaction.update(bookingRequests).set({ status, reviewedAt: new Date() }).where(eq(bookingRequests.id, pending.id));
-          return { status, booking: null };
+          return { status, booking: null, rejectedRequest: status === "REJECTED" ? pending : null };
         }
         await checkAvailability(transaction, pending, pending.id);
         const [booking] = await transaction.insert(bookings).values({ name: pending.name, email: pending.email, bookingDate: pending.bookingDate, slotTime: pending.slotTime, endTime: pending.endTime }).returning();
         await transaction.update(bookingRequests).set({ status: "APPROVED", bookingId: booking.id, reviewedAt: new Date() }).where(eq(bookingRequests.id, pending.id));
-        return { status: "APPROVED" as const, booking };
+        return { status: "APPROVED" as const, booking, rejectedRequest: null };
       });
-      const emailSent = result.booking ? await sendConfirmationEmail(result.booking) : false;
+      const emailSent = result.booking ? await sendConfirmationEmail(result.booking) : result.rejectedRequest ? await sendRejectionEmail(result.rejectedRequest) : false;
       return json({ status: result.status, booking: result.booking ? serializeBooking(result.booking) : null, email_sent: emailSent });
     }
     return json({ error: "Method not allowed." }, 405);
