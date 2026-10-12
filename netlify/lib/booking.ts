@@ -1,10 +1,10 @@
-import { and, eq, gt, lt, sql } from "drizzle-orm";
-import { db } from "../../db/index.js";
-import { bookings } from "../../db/schema.js";
+import { and, eq, gt, lt, ne, sql } from "drizzle-orm";
+import type { getDb } from "../../db/index.js";
+import { bookingRequests, bookings } from "../../db/schema.js";
 import { ApiError } from "./http.js";
 
 export const courtName = "PGB Padel Court";
-type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+type Transaction = Parameters<Parameters<ReturnType<typeof getDb>["transaction"]>[0]>[0];
 
 export function validateBooking(body: Record<string, unknown>, publicRequest = false) {
   const name = typeof body.name === "string" ? body.name.trim() : "";
@@ -36,13 +36,21 @@ export async function lockDate(transaction: Transaction, bookingDate: string) {
   await transaction.execute(sql`SELECT pg_advisory_xact_lock(hashtext('pgb-court:' || ${bookingDate}))`);
 }
 
-export async function checkAvailability(transaction: Transaction, booking: { bookingDate: string; slotTime: string; endTime: string }) {
+export async function checkAvailability(transaction: Transaction, booking: { bookingDate: string; slotTime: string; endTime: string }, excludedRequestId?: string) {
   const [overlap] = await transaction.select({ id: bookings.id }).from(bookings).where(and(
     eq(bookings.bookingDate, booking.bookingDate),
     lt(bookings.slotTime, booking.endTime),
     gt(bookings.endTime, booking.slotTime),
   )).limit(1);
   if (overlap) throw new ApiError(409, "This time range is already booked. Please choose another time.");
+  const [pending] = await transaction.select({ id: bookingRequests.id }).from(bookingRequests).where(and(
+    eq(bookingRequests.status, "PENDING"),
+    eq(bookingRequests.bookingDate, booking.bookingDate),
+    lt(bookingRequests.slotTime, booking.endTime),
+    gt(bookingRequests.endTime, booking.slotTime),
+    excludedRequestId ? ne(bookingRequests.id, excludedRequestId) : undefined,
+  )).limit(1);
+  if (pending) throw new ApiError(409, "Booking pending for this time range. Please choose another time.");
 }
 
 export function serializeBooking(booking: typeof bookings.$inferSelect) {

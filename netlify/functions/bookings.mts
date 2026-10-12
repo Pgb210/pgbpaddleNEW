@@ -1,7 +1,7 @@
 import type { Config } from "@netlify/functions";
 import { asc, eq } from "drizzle-orm";
-import { db } from "../../db/index.js";
-import { bookings } from "../../db/schema.js";
+import { getDb } from "../../db/index.js";
+import { bookingRequests, bookings } from "../../db/schema.js";
 import { getRole, requireAdmin } from "../lib/auth.js";
 import { checkAvailability, lockDate, serializeBooking, validateBooking } from "../lib/booking.js";
 import { sendConfirmationEmail } from "../lib/email.js";
@@ -12,13 +12,22 @@ export default async (request: Request) => {
     checkOrigin(request);
     if (request.method === "GET") {
       const role = await getRole(request);
-      const rows = await db.select().from(bookings).orderBy(asc(bookings.bookingDate), asc(bookings.slotTime));
-      return json(rows.map(booking => role ? serializeBooking(booking) : {
-        booking_date: booking.bookingDate, slot_time: booking.slotTime, end_time: booking.endTime,
-      }));
+      const db = getDb();
+      const availability = await db.transaction(async transaction => {
+        const rows = await transaction.select().from(bookings).orderBy(asc(bookings.bookingDate), asc(bookings.slotTime));
+        const holds = await transaction.select({
+          booking_date: bookingRequests.bookingDate, slot_time: bookingRequests.slotTime,
+          end_time: bookingRequests.endTime, status: bookingRequests.status,
+        }).from(bookingRequests).where(eq(bookingRequests.status, "PENDING"));
+        return [...rows.map(booking => role ? serializeBooking(booking) : {
+          booking_date: booking.bookingDate, slot_time: booking.slotTime, end_time: booking.endTime,
+        }), ...holds];
+      }, { isolationLevel: "repeatable read", accessMode: "read only" });
+      return json(availability);
     }
     if (request.method === "POST") {
       await requireAdmin(request);
+      const db = getDb();
       const details = validateBooking(await readBody(request));
       const created = await db.transaction(async transaction => {
         await lockDate(transaction, details.bookingDate);
@@ -31,6 +40,7 @@ export default async (request: Request) => {
     }
     if (request.method === "DELETE") {
       await requireAdmin(request);
+      const db = getDb();
       const id = new URL(request.url).searchParams.get("id");
       if (!id || !/^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(id)) throw new ApiError(400, "A valid booking ID is required.");
       const [deleted] = await db.delete(bookings).where(eq(bookings.id, id)).returning({ id: bookings.id });

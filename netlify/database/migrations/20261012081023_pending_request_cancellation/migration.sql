@@ -1,0 +1,1 @@
+ALTER TABLE "booking_requests" DROP CONSTRAINT "booking_requests_status_check", ADD CONSTRAINT "booking_requests_status_check" CHECK ("status" IN ('PENDING', 'APPROVED', 'REJECTED', 'CANCELLED'));
