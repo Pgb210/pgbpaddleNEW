@@ -1,6 +1,6 @@
 import type { Config } from "@netlify/functions";
 import { asc, eq } from "drizzle-orm";
-import { db } from "../../db/index.js";
+import { getDb } from "../../db/index.js";
 import { bookingRequests, bookings } from "../../db/schema.js";
 import { requireAdmin } from "../lib/auth.js";
 import { checkAvailability, lockDate, serializeBooking, validateBooking } from "../lib/booking.js";
@@ -12,10 +12,12 @@ export default async (request: Request) => {
     checkOrigin(request);
     if (request.method === "GET") {
       await requireAdmin(request);
+      const db = getDb();
       const rows = await db.select().from(bookingRequests).where(eq(bookingRequests.status, "PENDING")).orderBy(asc(bookingRequests.createdAt));
       return json(rows);
     }
     if (request.method === "POST") {
+      const db = getDb();
       const body = await readBody(request);
       const details = validateBooking(body, true);
       const phone = typeof body.phone === "string" ? body.phone.trim() : "";
@@ -38,8 +40,9 @@ export default async (request: Request) => {
     }
     if (request.method === "PATCH") {
       await requireAdmin(request);
+      const db = getDb();
       const body = await readBody(request);
-      if (typeof body.id !== "string" || !/^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(body.id) || (body.action !== "approve" && body.action !== "reject" && body.action !== "notify")) {
+      if (typeof body.id !== "string" || !/^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(body.id) || (body.action !== "approve" && body.action !== "reject" && body.action !== "cancel" && body.action !== "notify")) {
         throw new ApiError(400, "Choose a valid request and action.");
       }
       const [existing] = await db.select().from(bookingRequests).where(eq(bookingRequests.id, body.id)).limit(1);
@@ -54,11 +57,12 @@ export default async (request: Request) => {
         await lockDate(transaction, existing.bookingDate);
         const [pending] = await transaction.select().from(bookingRequests).where(eq(bookingRequests.id, existing.id)).for("update");
         if (pending.status !== "PENDING") throw new ApiError(409, "This request has already been reviewed.");
-        if (body.action === "reject") {
-          await transaction.update(bookingRequests).set({ status: "REJECTED", reviewedAt: new Date() }).where(eq(bookingRequests.id, pending.id));
-          return { status: "REJECTED" as const, booking: null };
+        if (body.action === "reject" || body.action === "cancel") {
+          const status = body.action === "cancel" ? "CANCELLED" as const : "REJECTED" as const;
+          await transaction.update(bookingRequests).set({ status, reviewedAt: new Date() }).where(eq(bookingRequests.id, pending.id));
+          return { status, booking: null };
         }
-        await checkAvailability(transaction, pending);
+        await checkAvailability(transaction, pending, pending.id);
         const [booking] = await transaction.insert(bookings).values({ name: pending.name, email: pending.email, bookingDate: pending.bookingDate, slotTime: pending.slotTime, endTime: pending.endTime }).returning();
         await transaction.update(bookingRequests).set({ status: "APPROVED", bookingId: booking.id, reviewedAt: new Date() }).where(eq(bookingRequests.id, pending.id));
         return { status: "APPROVED" as const, booking };

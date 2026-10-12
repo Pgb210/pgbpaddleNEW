@@ -57,27 +57,6 @@
   .login-logo .icon { font-size: 40px; display: block; margin-bottom: 8px; }
   .login-logo h1 { font-size: 20px; font-weight: 600; color: var(--green-dark); }
   .login-logo p { font-size: 13px; color: var(--muted); margin-top: 4px; }
-  .login-tabs {
-    display: flex;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    overflow: hidden;
-    margin-bottom: 1.5rem;
-  }
-  .login-tab {
-    flex: 1;
-    padding: 9px;
-    text-align: center;
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    background: transparent;
-    border: none;
-    font-family: var(--sans);
-    color: var(--muted);
-    transition: all 0.15s;
-  }
-  .login-tab.active { background: var(--green-dark); color: #fff; }
   .login-form-group { margin-bottom: 14px; }
   .login-form-group label { display: block; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 6px; }
   .login-form-group input {
@@ -170,9 +149,9 @@
   .slots-list { display: flex; flex-direction: column; }
   .slot-row { display: flex; align-items: center; padding: 10px 1.25rem; border-bottom: 1px solid var(--border); gap: 12px; cursor: pointer; transition: background 0.1s; }
   .slot-row:last-child { border-bottom: none; }
-  .slot-row:hover:not(.slot-full):not(.slot-viewer) { background: var(--green-light); }
+  .slot-row:hover:not(.slot-full):not(.slot-display) { background: var(--green-light); }
   .slot-row.slot-selected { background: var(--green-light); border-left: 3px solid var(--green-mid); }
-  .slot-row.slot-full, .slot-row.slot-viewer { cursor: default; opacity: 0.6; }
+  .slot-row.slot-full, .slot-row.slot-display { cursor: default; opacity: 0.6; }
   .slot-time { font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--text); min-width: 110px; }
   .slot-bar-wrap { flex: 1; }
   .slot-bar-bg { height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; }
@@ -182,6 +161,7 @@
   .slot-badge { font-size: 10px; font-weight: 600; padding: 3px 8px; border-radius: 10px; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
   .badge-open { background: var(--green-light); color: var(--green-dark); }
   .badge-full { background: #f0f0ef; color: var(--muted); }
+  .badge-pending { background: #fff3e0; color: #7a4500; }
 
   /* ── Right panel ── */
   .right-panel { display: flex; flex-direction: column; gap: 1.5rem; }
@@ -196,7 +176,6 @@
   .btn-book:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; }
   .empty-prompt { text-align: center; padding: 2rem 1rem; color: var(--muted); font-size: 14px; }
   .empty-prompt .big { font-size: 32px; margin-bottom: 8px; }
-  .viewer-notice { text-align: center; padding: 1.5rem 1rem; color: var(--muted); font-size: 14px; background: #f9f9f8; border-radius: 8px; }
 
   /* ── Bookings table ── */
   .bookings-table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -258,11 +237,6 @@
       <h1>PGB Sports</h1>
       <p>Paddle Court Booking</p>
     </div>
-    <div class="login-tabs">
-      <button class="login-tab active" id="tabAdmin" onclick="switchLoginTab('admin')">Admin Login</button>
-      <button class="login-tab" id="tabViewer" onclick="switchLoginTab('viewer')">View Bookings</button>
-    </div>
-
     <!-- Admin form -->
     <div id="adminLoginForm">
       <div class="login-form-group">
@@ -277,15 +251,6 @@
       <button class="btn-login" onclick="loginAdmin()">Login as Admin</button>
     </div>
 
-    <!-- Viewer form -->
-    <div id="viewerLoginForm" style="display:none;">
-      <div class="login-form-group">
-        <label>Viewer PIN</label>
-        <input type="password" id="viewerPin" placeholder="Enter PIN" maxlength="256" inputmode="numeric" />
-      </div>
-      <div class="login-error" id="viewerError">Incorrect PIN. Please try again.</div>
-      <button class="btn-login" onclick="loginViewer()">View Bookings</button>
-    </div>
     <button type="button" class="btn-login public-entry" onclick="openPublic()">Browse availability & request a booking</button>
     <button type="button" class="pwa-install pwa-install-login" data-pwa-install hidden>Install app</button>
   </div>
@@ -303,7 +268,7 @@
     </div>
     <div class="header-right">
       <button type="button" class="pwa-install pwa-install-header" data-pwa-install hidden>Install app</button>
-      <span class="header-role" id="roleLabel">Viewer</span>
+      <span class="header-role" id="roleLabel">Public requests</span>
       <button class="btn-logout" id="accountButton" onclick="openLogin()">Staff login</button>
     </div>
   </header>
@@ -347,11 +312,8 @@
       <div class="card" id="bookingCard">
         <div class="card-header"><span class="card-title" id="bookingTitle">Request a booking</span></div>
         <div class="card-body">
-          <div class="request-note" id="requestNote">Choose a time and send a request, from 30 minutes up to a maximum of 2 hours. <strong>This is not a confirmed booking.</strong> An admin needs to approve it. Pending requests do not reserve the court.</div>
+          <div class="request-note" id="requestNote">Choose a time and send a request, from 30 minutes up to a maximum of 2 hours. <strong>This is not a confirmed booking.</strong> An admin needs to approve it. Your requested times are held while the request is pending and released if it is rejected or cancelled.</div>
           <div class="request-success" id="requestSuccess" role="status" tabindex="-1" hidden></div>
-          <div id="viewerNotice" class="viewer-notice" style="display:none;">
-            🔒 You are in view-only mode. Log in as Admin to make bookings.
-          </div>
           <div id="bookForm">
             <div class="form-group"><label for="courtInput">Court</label><select id="courtInput"><option>PGB Padel Court</option></select></div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
@@ -366,7 +328,7 @@
             </div>
             <div id="bookingPreview" class="selected-info" style="display:none;"></div>
             <div id="clashWarning" style="display:none;background:#fff3e0;border:1px solid #f0b429;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px;color:#7a4500;">
-              ⚠️ This time range overlaps with an existing booking. Please choose a different time.
+              ⚠️ This time range overlaps with a confirmed booking or pending request. Please choose a different time.
             </div>
             <div class="form-group">
               <label for="nameInput">Your full name</label>
@@ -411,16 +373,6 @@
             <span class="save-msg" id="adminSaveMsg">✓ Saved</span>
           </div>
 
-          <div class="settings-section">
-            <h3>Change Viewer PIN</h3>
-            <div class="form-group">
-              <label>New PIN</label>
-              <input type="password" id="newViewerPin" placeholder="New PIN" maxlength="10" inputmode="numeric" />
-            </div>
-            <button class="btn-save" onclick="saveViewerPin()">Save</button>
-            <span class="save-msg" id="viewerSaveMsg">✓ Saved</span>
-          </div>
-
         </div>
       </div>
 
@@ -439,7 +391,7 @@
 
 <script>
 // ═══ State ═══
-let currentRole = null; // 'admin' | 'viewer'
+let currentRole = null;
 let selectedDate = null;   // Date at local midnight — the day being viewed/booked
 let calendarMonth = null;  // Date at the 1st of the month shown in the calendar
 let minDate = null;        // first bookable day (today)
@@ -469,33 +421,14 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove('show'), 3500);
 }
 
-// ═══ Login Tab ═══
-function switchLoginTab(tab) {
-  document.getElementById('adminLoginForm').style.display = tab === 'admin' ? 'block' : 'none';
-  document.getElementById('viewerLoginForm').style.display = tab === 'viewer' ? 'block' : 'none';
-  document.getElementById('tabAdmin').classList.toggle('active', tab === 'admin');
-  document.getElementById('tabViewer').classList.toggle('active', tab === 'viewer');
-  document.getElementById('adminError').style.display = 'none';
-  document.getElementById('viewerError').style.display = 'none';
-}
-
 async function loginAdmin() {
   const email = document.getElementById('adminEmail').value.trim();
   const pass  = document.getElementById('adminPassword').value;
-  await loginStaff('admin', email, pass, 'adminError');
-}
-
-async function loginViewer() {
-  const pin = document.getElementById('viewerPin').value.trim();
-  await loginStaff('viewer', '', pin, 'viewerError');
-}
-
-async function loginStaff(role, email, password, errorId) {
-  const error = document.getElementById(errorId);
+  const error = document.getElementById('adminError');
   error.style.display = 'none';
   try {
-    await api('/api/session', { method: 'POST', body: JSON.stringify({ role, email, password }) });
-    currentRole = role;
+    await api('/api/session', { method: 'POST', body: JSON.stringify({ role: 'admin', email, password: pass }) });
+    currentRole = 'admin';
     clearLoginFields();
     showApp();
   } catch (failure) {
@@ -507,7 +440,6 @@ async function loginStaff(role, email, password, errorId) {
 function clearLoginFields() {
   document.getElementById('adminEmail').value = '';
   document.getElementById('adminPassword').value = '';
-  document.getElementById('viewerPin').value = '';
 }
 
 async function logout() {
@@ -523,6 +455,7 @@ async function logout() {
 function openLogin() {
   if (currentRole !== 'public') { logout(); return; }
   clearInterval(refreshTimer);
+  document.getElementById('adminError').style.display = 'none';
   document.getElementById('appScreen').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
 }
@@ -555,14 +488,12 @@ function showApp() {
     roleLabel.textContent = 'Admin';
     roleLabel.className = 'header-role admin';
     document.getElementById('settingsCard').style.display = 'block';
-    document.getElementById('viewerNotice').style.display = 'none';
     document.getElementById('bookForm').style.display = 'block';
   } else {
-    roleLabel.textContent = isPublic ? 'Public requests' : 'Viewer';
+    roleLabel.textContent = 'Public requests';
     roleLabel.className = 'header-role';
     document.getElementById('settingsCard').style.display = 'none';
-    document.getElementById('viewerNotice').style.display = isPublic ? 'none' : 'block';
-    document.getElementById('bookForm').style.display = isPublic ? 'block' : 'none';
+    document.getElementById('bookForm').style.display = 'block';
   }
 
   initDates();
@@ -598,13 +529,6 @@ async function saveAdminCreds() {
   if (ok) { showSaveMsg('adminSaveMsg'); document.getElementById('newAdminEmail').value = ''; document.getElementById('newAdminPassword').value = ''; }
 }
 
-async function saveViewerPin() {
-  const pin = document.getElementById('newViewerPin').value.trim();
-  if (!pin) { showToast('Please enter a PIN'); return; }
-  const ok = await saveSettings({ viewer_pin: pin });
-  if (ok) { showSaveMsg('viewerSaveMsg'); document.getElementById('newViewerPin').value = ''; }
-}
-
 function showSaveMsg(id) {
   const el = document.getElementById(id);
   el.style.display = 'inline';
@@ -622,7 +546,7 @@ async function api(path, options = {}) {
 async function fetchBookings() {
   const role = currentRole;
   try {
-    const res = await fetch('/api/bookings');
+    const res = await fetch('/api/bookings', { cache: 'no-store' });
     if (!res.ok) throw new Error(`fetch failed (${res.status})`);
     const rows = await res.json();
     if (currentRole !== role) return;
@@ -630,7 +554,7 @@ async function fetchBookings() {
     availabilityLoaded = true;
     renderAll();
     if (currentRole === 'public') populateTimeDropdowns(true);
-    if (currentRole !== 'viewer') onTimeChange();
+    onTimeChange();
   } catch(e) {
     if (currentRole !== role) return;
     availabilityLoaded = false;
@@ -660,7 +584,7 @@ function renderPendingRequests() {
   document.getElementById('pendingCount').textContent = pendingRequests.length;
   const alert = document.getElementById('pendingAlert');
   alert.hidden = !pendingRequests.length;
-  alert.textContent = `${pendingRequests.length} booking request${pendingRequests.length === 1 ? '' : 's'} awaiting your review. Requests do not reserve the court.`;
+  alert.textContent = `${pendingRequests.length} booking request${pendingRequests.length === 1 ? '' : 's'} awaiting your review. Requested times are held until approval, rejection, or cancellation.`;
   const body = document.getElementById('pendingBody');
   if (!pendingRequests.length) { body.innerHTML = '<div class="state-msg">All caught up — no pending requests.</div>'; return; }
   body.innerHTML = pendingRequests.map(request => `
@@ -673,6 +597,7 @@ function renderPendingRequests() {
       <div class="pending-actions">
         <button type="button" class="approve" data-request-id="${request.id}" data-action="approve">Approve</button>
         <button type="button" class="reject" data-request-id="${request.id}" data-action="reject">Reject</button>
+        <button type="button" data-request-id="${request.id}" data-action="cancel">Cancel request</button>
         ${request.notificationSent ? '' : `<button type="button" data-request-id="${request.id}" data-action="notify">Retry email notification</button>`}
       </div>
     </article>`).join('');
@@ -687,7 +612,7 @@ document.getElementById('pendingBody').addEventListener('click', async event => 
     const result = await api('/api/booking-requests', { method: 'PATCH', body: JSON.stringify({ id: button.dataset.requestId, action: button.dataset.action }) });
     if (button.dataset.action === 'notify') showToast(result.notification_sent ? 'Admin notification email sent' : 'Email could not be sent. Check email configuration.');
     else if (result.status === 'APPROVED') showToast(result.email_sent ? 'Request approved — booking confirmed and email sent' : 'Request approved — booking confirmed, but confirmation email was not sent');
-    else showToast('Request rejected — the slot remains available unless separately booked');
+    else showToast(`Request ${result.status === 'CANCELLED' ? 'cancelled' : 'rejected'} — the hold is released`);
   } catch (error) {
     showToast(error.message);
   } finally {
@@ -754,7 +679,7 @@ function selectDate(d) {
   selectedSlotIdx = null;
   clearForm();
   renderAll();
-  if (currentRole !== 'viewer') populateTimeDropdowns();
+  populateTimeDropdowns();
 }
 
 // ═══ Render ═══
@@ -835,20 +760,22 @@ function renderSlots() {
     });
     const count = slotBks.length;
     const booked = count > 0;
+    const pending = booked && slotBks.every(booking => booking.status === 'PENDING');
+    const label = pending ? 'Booking pending' : booked ? 'Booked' : 'Open';
     // The court is booked exclusively, so a single booking takes the whole slot.
     const full = booked;
     if (!booked) openCount++;
     const pct = booked ? 100 : 0;
     const row = document.createElement('div');
-    row.className = 'slot-row slot-viewer' + (booked ? ' slot-full' : '');
+    row.className = 'slot-row slot-display' + (booked ? ' slot-full' : '');
     row.style.cursor = 'default';
     row.innerHTML = `
       <div class="slot-time">${minsToLabel(timeToMins(t))}</div>
       <div class="slot-bar-wrap">
         <div class="slot-bar-bg"><div class="slot-bar-fill${full?' full':''}" style="width:${pct}%"></div></div>
-        <div class="slot-count">${booked ? 'Booked' : ''}</div>
+        <div class="slot-count">${booked ? label : ''}</div>
       </div>
-      <span class="slot-badge ${booked?'badge-full':'badge-open'}">${booked?'Booked':'Open'}</span>
+      <span class="slot-badge ${pending?'badge-pending':booked?'badge-full':'badge-open'}">${label}</span>
     `;
     if (currentRole === 'public' && !booked) {
       row.classList.add('slot-selectable');
@@ -874,7 +801,7 @@ function renderSlots() {
 
 function renderBookingsPanel() {
   const body = document.getElementById('bookingsBody');
-  const bks = getBookingsForDate(selectedDate);
+  const bks = getBookingsForDate(selectedDate).filter(booking => booking.status !== 'PENDING');
   document.getElementById('bookingsDateLabel').textContent = fmt(selectedDate);
   document.getElementById('bookingsCount').textContent = bks.length;
   if (bks.length === 0) { body.innerHTML = '<div class="state-msg">No bookings yet for this day.</div>'; return; }
@@ -975,7 +902,6 @@ function checkClash(startMins, endMins) {
 function showForm() { /* no longer needed — form always visible for admin */ }
 
 function clearForm(keepSuccess = false) {
-  if (currentRole === 'viewer') return;
   document.getElementById('nameInput').value = '';
   document.getElementById('emailInput').value = '';
   document.getElementById('phoneInput').value = '';
@@ -1003,7 +929,7 @@ async function submitBooking() {
   const endMins   = timeToMins(endTime);
   if (endMins <= startMins) { showToast('Please select a valid end time'); return; }
   if (currentRole === 'public' && endMins - startMins > MAX_REQUEST_DURATION) { showToast('Booking requests cannot exceed 2 hours. Please choose a shorter time range.'); return; }
-  if (checkClash(startMins, endMins)) { showToast('This time range clashes with an existing booking'); return; }
+  if (checkClash(startMins, endMins)) { showToast('This time range clashes with a confirmed booking or pending request'); return; }
 
   const btn = document.getElementById('bookBtn');
   submittingBooking = true;
@@ -1020,7 +946,7 @@ async function submitBooking() {
     if (isPublic) {
       await api('/api/booking-requests', { method: 'POST', body: JSON.stringify({ ...booking, court: document.getElementById('courtInput').value, phone: document.getElementById('phoneInput').value.trim(), website: document.getElementById('websiteInput').value }) });
       const success = document.getElementById('requestSuccess');
-      success.textContent = 'Request received · PENDING. Your booking is not confirmed yet. An admin reviews your request and sends a confirmation email after approval. The court remains available until then.';
+      success.textContent = 'Request received · PENDING. Your requested times are now held, but your booking is not confirmed yet. An admin reviews your request and sends a confirmation email after approval. The hold is released if your request is rejected or cancelled.';
       success.hidden = false;
       clearForm(true);
       success.focus();
@@ -1055,10 +981,9 @@ function highlight(id) {
 
 // Enter key support on login
 document.getElementById('adminPassword').addEventListener('keydown', e => { if (e.key === 'Enter') loginAdmin(); });
-document.getElementById('viewerPin').addEventListener('keydown', e => { if (e.key === 'Enter') loginViewer(); });
 openPublic();
 api('/api/session').then(session => {
-  if (session.role && currentRole === 'public' && document.getElementById('loginScreen').style.display === 'none') {
+  if (session.role === 'admin' && currentRole === 'public' && document.getElementById('loginScreen').style.display === 'none') {
     currentRole = session.role;
     showApp();
   }

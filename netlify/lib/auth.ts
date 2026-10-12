@@ -1,13 +1,13 @@
 import { createHash, createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { getContext } from "@netlify/functions";
 import { eq } from "drizzle-orm";
-import { db } from "../../db/index.js";
+import { getDb } from "../../db/index.js";
 import { adminSettings } from "../../db/schema.js";
 import { ApiError } from "./http.js";
 
 const cookieName = "pgb_session";
 const sessionSeconds = 12 * 60 * 60;
-export type Role = "admin" | "viewer";
+export type Role = "admin";
 
 export function hashPassword(value: string) {
   const salt = randomBytes(16).toString("hex");
@@ -46,29 +46,27 @@ export function verifyAdminCredentials(email: string, password: string, settings
 }
 
 export async function getSettings(initialize = false) {
+  const db = getDb();
   const [settings] = await db.select().from(adminSettings).where(eq(adminSettings.id, "main")).limit(1);
   if (settings || !initialize) return settings;
   const adminEmail = Netlify.env.get("ADMIN_EMAIL")?.trim();
   const password = Netlify.env.get("ADMIN_PASSWORD");
-  const viewerPin = Netlify.env.get("VIEWER_PIN");
   if (!adminEmail || !password) {
     throw new ApiError(503, "Staff login needs server configuration. Please contact the site administrator.");
   }
   await db.insert(adminSettings).values({
     id: "main", adminEmail, passwordHash: hashPassword(password),
-    viewerPinHash: viewerPin ? hashPassword(viewerPin) : null,
   }).onConflictDoNothing();
   return getSettings();
 }
 
 function signature(role: Role, expires: string, settings: typeof adminSettings.$inferSelect) {
-  const configured = role === "admin" ? previewAdminCredentials() : null;
+  const configured = previewAdminCredentials();
   if (configured) {
     const key = scryptSync(configured.password, `pgb-preview-admin-session:${configured.email}`, 64);
     return createHmac("sha256", key).update(`environment.${role}.${expires}.${configured.email}`).digest("hex");
   }
-  const key = role === "admin" ? settings.passwordHash : settings.viewerPinHash;
-  if (!key) return "";
+  const key = settings.passwordHash;
   return createHmac("sha256", key).update(`${role}.${expires}.${settings.adminEmail}`).digest("hex");
 }
 
@@ -85,7 +83,7 @@ export async function getRole(request: Request): Promise<Role | null> {
   if (!cookie) return null;
   const parts = cookie.slice(cookieName.length + 1).split(".");
   const [role, expires, provided] = parts;
-  if (parts.length !== 3 || (role !== "admin" && role !== "viewer") || !/^\d+$/.test(expires) || Number(expires) <= Date.now() / 1000 || !/^[a-f0-9]{64}$/.test(provided)) return null;
+  if (parts.length !== 3 || role !== "admin" || !/^\d+$/.test(expires) || Number(expires) <= Date.now() / 1000 || !/^[a-f0-9]{64}$/.test(provided)) return null;
   const settings = await getSettings();
   if (!settings) return null;
   const expected = signature(role, expires, settings);

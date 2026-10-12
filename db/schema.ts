@@ -27,7 +27,7 @@ export const bookingRequests = pgTable("booking_requests", {
   reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
 }, (table) => [
   index("booking_requests_status_created_idx").on(table.status, table.createdAt),
-  check("booking_requests_status_check", sql`${table.status} IN ('PENDING', 'APPROVED', 'REJECTED')`),
+  check("booking_requests_status_check", sql`${table.status} IN ('PENDING', 'APPROVED', 'REJECTED', 'CANCELLED')`),
 ]);
 
 export const adminSettings = pgTable("admin_settings", {
