@@ -8,6 +8,7 @@ export const bookings = pgTable("bookings", {
   bookingDate: date("booking_date", { mode: "string" }).notNull(),
   slotTime: text("slot_time").notNull(),
   endTime: text("end_time").notNull(),
+  cancellationTokenHash: text("cancellation_token_hash").unique(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
@@ -35,4 +36,17 @@ export const adminSettings = pgTable("admin_settings", {
   adminEmail: text("admin_email").notNull(),
   passwordHash: text("password_hash").notNull(),
   viewerPinHash: text("viewer_pin_hash"),
+});
+
+// Durable email delivery record survives deletion of the booking and its private token.
+export const cancellationNotices = pgTable("cancellation_notices", {
+  bookingId: uuid("booking_id").primaryKey(),
+  name: text().notNull(),
+  email: text().notNull(),
+  bookingDate: date("booking_date", { mode: "string" }).notNull(),
+  slotTime: text("slot_time").notNull(),
+  endTime: text("end_time").notNull(),
+  customerSent: boolean("customer_sent").notNull().default(false),
+  adminSent: boolean("admin_sent").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });

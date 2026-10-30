@@ -1,3 +1,4 @@
+import { createCancellationToken } from "../lib/cancellation.js";
 import type { Config } from "@netlify/functions";
 import { asc, eq } from "drizzle-orm";
 import { getDb } from "../../db/index.js";
@@ -29,13 +30,14 @@ export default async (request: Request) => {
       await requireAdmin(request);
       const db = getDb();
       const details = validateBooking(await readBody(request));
+      const cancellation = createCancellationToken();
       const created = await db.transaction(async transaction => {
         await lockDate(transaction, details.bookingDate);
         await checkAvailability(transaction, details);
-        const [created] = await transaction.insert(bookings).values(details).returning();
+        const [created] = await transaction.insert(bookings).values({ ...details, cancellationTokenHash: cancellation.hash }).returning();
         return created;
       });
-      const emailSent = await sendConfirmationEmail(created);
+      const emailSent = await sendConfirmationEmail(created, cancellation.token, new URL(request.url).origin);
       return json({ ...serializeBooking(created), email_sent: emailSent }, 201);
     }
     if (request.method === "DELETE") {

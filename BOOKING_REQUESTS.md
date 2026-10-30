@@ -145,3 +145,27 @@ authentication, and confirmation email content remain unchanged.
    and the existing Admin credential settings control. Confirm that Viewer
    login attempts are rejected, old Viewer cookies do not authenticate or
    disclose booking contacts, and the PIN settings endpoint is no longer active.
+
+## Confirmed booking self-cancellation
+
+New approved bookings and bookings created directly by an admin include a private cancellation link in their confirmation email. The link opens `/cancel-booking.html`, displays the date and time, and requires an explicit confirmation. Possession of the random 256-bit token authorizes cancellation of only its associated booking. Only a SHA-256 hash is stored; booking IDs never authorize this operation. Tokens stay in the email URL fragment, are removed from browser history on page load, and are submitted in JSON bodies rather than URLs. Avoid logging request bodies for this endpoint.
+
+The database checks the booking start in `Europe/Dublin` after acquiring the existing date lock. Cancellation atomically deletes the booking and token, marks the originating approved request `CANCELLED`, and queues customer and admin notifications. Removing the booking releases availability immediately. Existing admin deletion and authentication remain unchanged. Previously sent confirmation emails are not retroactively modified.
+
+Cancellation emails use the existing Resend configuration and the same configured admin recipient precedence as booking-request notifications. A durable notification record tracks customer and admin delivery separately. Failed deliveries use stable idempotency keys and are retried by `cancellation-emails` every ten minutes on published deploys. Scheduled functions do not automatically execute in Deploy Previews; immediate cancellation emails still run there.
+
+### Validation
+
+`npm test` runs database integration tests against an isolated PGlite PostgreSQL instance, applies the migration chain to that test database, and mocks outbound email delivery. It also exercises the confirmation-page script. `npm run typecheck` checks the server TypeScript. These tests do not send real emails or touch site data.
+
+Before promoting a Deploy Preview, verify the following on its isolated database using bookings and email addresses controlled by the tester:
+
+1. Submit a request, approve it as admin, and follow the confirmation email link on the preview hostname. Also verify a direct admin-created booking includes a working link.
+2. Verify opening the link leaves availability unchanged and shows the correct date and time. Explicitly cancel, check slot availability, verify the request becomes cancelled, and check receipt of customer and configured admin emails.
+3. Try the link again, a modified token, a booking ID alone, and a link belonging to an admin-deleted booking. All must fail. Confirm a second customer's booking is unchanged.
+4. Submit simultaneous cancellations and a competing request for that time. Verify one cancellation succeeds and the normal conflict rules apply when the slot is claimed again.
+5. Verify cancellation at and after booking start fails, including Dublin daylight-saving dates. Check that the admin can still delete the booking directly.
+6. Recheck rejection emails, pending cancellation, pending holds, two-hour maximum, opening hours, and admin/viewer authentication.
+7. Simulate email failure only with preview configuration or a controlled mock, confirm the slot stays released, and manually invoke the scheduled retry in the test environment to verify delivery flags and recipient selection.
+
+Live preview checks and real email delivery must be recorded separately from the local automated test results. Do not use copied real customer bookings for cancellation tests or publish to production as part of preview validation.
