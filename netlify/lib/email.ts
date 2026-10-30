@@ -1,4 +1,6 @@
-import { bookings, bookingRequests } from "../../db/schema.js";
+import { eq } from "drizzle-orm";
+import { getDb } from "../../db/index.js";
+import { bookings, bookingRequests, cancellationNotices } from "../../db/schema.js";
 import { getSettings } from "./auth.js";
 import { courtName, escapeHtml, formatDateLabel } from "./booking.js";
 
@@ -25,11 +27,13 @@ async function sendEmail(to: string | string[], subject: string, html: string, i
   }
 }
 
-export function sendConfirmationEmail(booking: typeof bookings.$inferSelect) {
+export function sendConfirmationEmail(booking: typeof bookings.$inferSelect, token: string, origin: string) {
   return sendEmail(booking.email, "Your paddle court booking is confirmed", `
     <p>Hi ${escapeHtml(booking.name)},</p><p>Your paddle court booking is confirmed:</p>
     <ul><li><strong>Court:</strong> ${courtName}</li><li><strong>Date:</strong> ${formatDateLabel(booking.bookingDate)}</li>
     <li><strong>Time:</strong> ${booking.slotTime} – ${booking.endTime}</li></ul><p>See you on the court!</p>
+    <p><a href="${escapeHtml(`${origin}/cancel-booking.html#${token}`)}">Cancel booking</a></p>
+    <p>This private link only cancels this booking. Keep it private. Cancellation is available until the booking starts (Europe/Dublin time).</p>
   `, `confirmation-${booking.id}`);
 }
 
@@ -44,9 +48,7 @@ export function sendRejectionEmail(bookingRequest: typeof bookingRequests.$infer
 }
 
 export async function sendRequestNotification(bookingRequest: typeof bookingRequests.$inferSelect) {
-  const configuredRecipients = Netlify.env.get("BOOKING_REQUEST_ADMIN_EMAILS") || "";
-  const recipients = [...new Set(configuredRecipients.split(/[,;\n]+/).map(recipient => recipient.trim().toLowerCase()).filter(Boolean))];
-  const to = recipients.length ? recipients : Netlify.env.get("BOOKING_REQUEST_ADMIN_EMAIL") || (await getSettings())?.adminEmail || Netlify.env.get("ADMIN_EMAIL") || "";
+  const to = await adminRecipients();
   return sendEmail(to, "New PGB Padel booking request — approval needed", `
     <p>A new booking request is pending admin approval.</p>
     <ul><li><strong>Name:</strong> ${escapeHtml(bookingRequest.name)}</li>
@@ -56,4 +58,25 @@ export async function sendRequestNotification(bookingRequest: typeof bookingRequ
     <li><strong>Time:</strong> ${bookingRequest.slotTime} – ${bookingRequest.endTime}</li></ul>
     <p>Open PGB Padel Booking, log in as Admin, and review Pending Requests. This request is not a confirmed booking.</p>
   `, `request-${bookingRequest.id}`);
+}
+
+async function adminRecipients() {
+  const configuredRecipients = Netlify.env.get("BOOKING_REQUEST_ADMIN_EMAILS") || "";
+  const recipients = [...new Set(configuredRecipients.split(/[,;\n]+/).map(recipient => recipient.trim().toLowerCase()).filter(Boolean))];
+  return recipients.length ? recipients : Netlify.env.get("BOOKING_REQUEST_ADMIN_EMAIL") || (await getSettings())?.adminEmail || Netlify.env.get("ADMIN_EMAIL") || "";
+}
+
+export async function deliverCancellationNotice(notice: typeof cancellationNotices.$inferSelect, db = getDb()) {
+  const details = `<ul><li><strong>Court:</strong> ${courtName}</li><li><strong>Date:</strong> ${formatDateLabel(notice.bookingDate)}</li><li><strong>Time:</strong> ${notice.slotTime} – ${notice.endTime} (Europe/Dublin)</li></ul>`;
+  let customerSent = notice.customerSent;
+  let adminSent = notice.adminSent;
+  if (!customerSent) {
+    customerSent = await sendEmail(notice.email, "Your PGB Padel booking has been cancelled", `<p>Hi ${escapeHtml(notice.name)},</p><p>Your booking has been cancelled and the time slot is available again.</p>${details}`, `cancellation-customer-${notice.bookingId}`);
+    if (customerSent) await db.update(cancellationNotices).set({ customerSent: true }).where(eq(cancellationNotices.bookingId, notice.bookingId));
+  }
+  if (!adminSent) {
+    adminSent = await sendEmail(await adminRecipients(), "PGB Padel booking cancelled by customer", `<p>${escapeHtml(notice.name)} (${escapeHtml(notice.email)}) cancelled their confirmed booking. The time slot has been released.</p>${details}`, `cancellation-admin-${notice.bookingId}`);
+    if (adminSent) await db.update(cancellationNotices).set({ adminSent: true }).where(eq(cancellationNotices.bookingId, notice.bookingId));
+  }
+  return { customerSent, adminSent };
 }

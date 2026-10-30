@@ -1,3 +1,4 @@
+import { createCancellationToken } from "../lib/cancellation.js";
 import type { Config } from "@netlify/functions";
 import { asc, eq } from "drizzle-orm";
 import { getDb } from "../../db/index.js";
@@ -53,6 +54,7 @@ export default async (request: Request) => {
         if (notificationSent) await db.update(bookingRequests).set({ notificationSent: true }).where(eq(bookingRequests.id, existing.id));
         return json({ notification_sent: notificationSent });
       }
+      const cancellation = createCancellationToken();
       const result = await db.transaction(async transaction => {
         await lockDate(transaction, existing.bookingDate);
         const [pending] = await transaction.select().from(bookingRequests).where(eq(bookingRequests.id, existing.id)).for("update");
@@ -63,11 +65,11 @@ export default async (request: Request) => {
           return { status, booking: null, rejectedRequest: status === "REJECTED" ? pending : null };
         }
         await checkAvailability(transaction, pending, pending.id);
-        const [booking] = await transaction.insert(bookings).values({ name: pending.name, email: pending.email, bookingDate: pending.bookingDate, slotTime: pending.slotTime, endTime: pending.endTime }).returning();
+        const [booking] = await transaction.insert(bookings).values({ cancellationTokenHash: cancellation.hash, name: pending.name, email: pending.email, bookingDate: pending.bookingDate, slotTime: pending.slotTime, endTime: pending.endTime }).returning();
         await transaction.update(bookingRequests).set({ status: "APPROVED", bookingId: booking.id, reviewedAt: new Date() }).where(eq(bookingRequests.id, pending.id));
         return { status: "APPROVED" as const, booking, rejectedRequest: null };
       });
-      const emailSent = result.booking ? await sendConfirmationEmail(result.booking) : result.rejectedRequest ? await sendRejectionEmail(result.rejectedRequest) : false;
+      const emailSent = result.booking ? await sendConfirmationEmail(result.booking, cancellation.token, new URL(request.url).origin) : result.rejectedRequest ? await sendRejectionEmail(result.rejectedRequest) : false;
       return json({ status: result.status, booking: result.booking ? serializeBooking(result.booking) : null, email_sent: emailSent });
     }
     return json({ error: "Method not allowed." }, 405);
