@@ -12,8 +12,9 @@ const pending = [
 ];
 
 async function dashboard(sessionWorks = true) {
-  const dom = new JSDOM(html, { url: 'https://preview.example.test/', runScripts: 'outside-only' });
+  const dom = new JSDOM(html, { url: 'https://preview.example.test/', runScripts: 'outside-only', pretendToBeVisual: true });
   const calls: { path: string; options: RequestInit }[] = [];
+  dom.window.setInterval = () => { throw new Error('Availability must not poll'); };
   let signedIn = false;
   dom.window.fetch = async (path: string, options: RequestInit = {}) => {
     calls.push({ path, options });
@@ -55,5 +56,48 @@ test('missing session displays an explicit admin authorization error rather than
   try {
     assert.match(document.getElementById('pendingBody')!.textContent!, /Admin login is required/);
     assert.doesNotMatch(document.getElementById('pendingBody')!.textContent!, /no pending requests/);
+  } finally { dom.window.close(); }
+});
+
+
+test('availability refreshes on date selection and manual refresh, and stays quiet while hidden', async () => {
+  const { dom, document, calls } = await dashboard();
+  const settle = () => new Promise(resolve => setImmediate(resolve));
+  const reads = () => calls.filter(call => call.path === '/api/bookings').length;
+  try {
+    const initial = reads();
+    assert.ok(initial > 0, 'loads on opening');
+    const nextDay = document.querySelector('.cal-day:not(:disabled):not(.selected)') as HTMLButtonElement;
+    nextDay.click();
+    await settle();
+    assert.equal(reads(), initial + 1);
+    (document.getElementById('refreshAvailability') as HTMLButtonElement).click();
+    await settle();
+    assert.equal(reads(), initial + 2);
+    assert.equal((document.getElementById('refreshAvailability') as HTMLButtonElement).disabled, false);
+    Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+    document.dispatchEvent(new dom.window.Event('visibilitychange'));
+    await dom.window.refreshAvailability();
+    assert.equal(reads(), initial + 2, 'no reads in background');
+    Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+    document.dispatchEvent(new dom.window.Event('visibilitychange'));
+    await settle();
+    assert.equal(reads(), initial + 3, 'refreshes once on foreground return');
+    const pendingReads = calls.filter(call => call.path === '/api/booking-requests').length;
+    assert.equal(pendingReads, reads() - 1, 'admin requests refresh alongside availability');
+  } finally { dom.window.close(); }
+});
+
+test('admin cancellation reloads authoritative availability', async () => {
+  const { dom, calls } = await dashboard();
+  try {
+    const before = calls.filter(call => call.path === '/api/bookings' && !call.options.method).length;
+    const originalFetch = dom.window.fetch;
+    dom.window.fetch = async (path: string, options: RequestInit = {}) => {
+      if (options.method === 'DELETE') return Response.json({ ok: true });
+      return originalFetch(path, options);
+    };
+    await dom.window.deleteBooking('test-booking');
+    assert.equal(calls.filter(call => call.path === '/api/bookings' && !call.options.method).length, before + 1);
   } finally { dom.window.close(); }
 });

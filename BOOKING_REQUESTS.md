@@ -84,7 +84,12 @@ existing tables, transaction locks, and conflict checks remain unchanged.
 
 Pending Requests lists all unreviewed requests, their contact information, and
 requested dates/times. The dashboard displays a pending count and a notification
-banner and checks for new requests every 30 seconds while open.
+banner. Availability and pending requests load on opening, date changes, manual
+“Refresh availability”, and return to the foreground. There is no periodic polling;
+hidden tabs skip refreshes. Booking actions refresh the acting page immediately
+and notify other open tabs in the same browser, including after cancellation links.
+Changes from other browsers appear on the next refresh; admin notification emails
+continue to alert staff to new requests.
 
 Each new request also attempts to send an admin email through the existing email
 integration. Email failure does not discard the request: the dashboard marks the
@@ -111,8 +116,8 @@ one rejection email attempt per request, including concurrent reviews. The email
 provider also receives a separate `rejection-<request ID>` idempotency key.
 Delivery failure does not undo the rejection or restore the hold; the admin sees
 whether the email was sent. Repeated review actions cannot resend it. No schema
-change or migration was needed. Open pages refresh availability every 30 seconds, and the
-acting admin's page refreshes immediately. Legacy overlapping pending requests
+change or migration was needed. The acting admin's page refreshes immediately,
+and other same-browser tabs receive an availability change notification. Legacy overlapping pending requests
 continue to hold their ranges; an admin must reject or cancel the conflicting
 request before approving the other. Cancelling an approved booking uses the
 existing admin booking cancellation control. Notifications, email retry behavior,
