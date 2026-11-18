@@ -292,9 +292,10 @@
         </div>
       </div>
       <div class="card">
-        <div class="card-header">
+        <div class="card-header" style="flex-wrap:wrap;gap:.5rem;">
           <span class="card-title">Availability</span>
           <span class="pill-count" id="openCount">—</span>
+          <button type="button" class="btn-today" id="refreshAvailability">Refresh availability</button>
         </div>
         <div class="slots-list" id="slotsList"><div class="state-msg">Loading…</div></div>
       </div>
@@ -400,7 +401,40 @@ let selectedSlotIdx = null;
 let allBookings = [];
 let pendingRequests = [];
 let knownPendingIds = null;
-let refreshTimer = null;
+let activeRefreshes = 0;
+// Same-origin tabs exchange invalidations only; no booking details or tokens.
+const availabilityChannel = typeof BroadcastChannel === 'function'
+  ? new BroadcastChannel('pgb-availability') : null;
+if (availabilityChannel) availabilityChannel.onmessage = () => refreshAvailability();
+document.getElementById('refreshAvailability').addEventListener('click', refreshAvailability);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) refreshAvailability();
+});
+window.addEventListener('pageshow', event => {
+  if (event.persisted) refreshAvailability();
+});
+
+function notifyAvailabilityChanged() {
+  availabilityChannel?.postMessage('changed');
+}
+
+async function refreshAvailability() {
+  // Hidden tabs never initiate automatic availability reads. Returning to the
+  // foreground loads fresh data, including changes made via cancellation links.
+  if (document.hidden || !currentRole || document.getElementById('appScreen').style.display === 'none') return;
+  const button = document.getElementById('refreshAvailability');
+  activeRefreshes++;
+  button.disabled = true;
+  button.textContent = 'Refreshing…';
+  try {
+    await Promise.all([fetchBookings(), ...(currentRole === 'admin' ? [fetchPendingRequests()] : [])]);
+  } finally {
+    if (--activeRefreshes === 0) {
+      button.disabled = false;
+      button.textContent = 'Refresh availability';
+    }
+  }
+}
 let availabilityLoaded = false;
 let submittingBooking = false;
 
@@ -454,7 +488,6 @@ async function logout() {
 
 function openLogin() {
   if (currentRole !== 'public') { logout(); return; }
-  clearInterval(refreshTimer);
   document.getElementById('adminError').style.display = 'none';
   document.getElementById('appScreen').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
@@ -501,13 +534,7 @@ function showApp() {
   renderAll();
   clearForm();
 
-  clearInterval(refreshTimer);
-  fetchBookings();
-  if (isAdmin) fetchPendingRequests();
-  refreshTimer = setInterval(() => {
-    fetchBookings();
-    if (currentRole === 'admin') fetchPendingRequests();
-  }, 30000);
+  refreshAvailability();
 }
 
 // ═══ Settings ═══
@@ -610,6 +637,7 @@ document.getElementById('pendingBody').addEventListener('click', async event => 
   buttons.forEach(control => control.disabled = true);
   try {
     const result = await api('/api/booking-requests', { method: 'PATCH', body: JSON.stringify({ id: button.dataset.requestId, action: button.dataset.action }) });
+    if (button.dataset.action !== 'notify') notifyAvailabilityChanged();
     if (button.dataset.action === 'notify') showToast(result.notification_sent ? 'Admin notification email sent' : 'Email could not be sent. Check email configuration.');
     else if (result.status === 'APPROVED') showToast(result.email_sent ? 'Request approved — booking confirmed and email sent' : 'Request approved — booking confirmed, but confirmation email was not sent');
     else if (result.status === 'REJECTED') showToast(result.email_sent ? 'Request rejected — the hold is released and rejection email sent' : 'Request rejected — the hold is released, but rejection email was not sent');
@@ -617,7 +645,7 @@ document.getElementById('pendingBody').addEventListener('click', async event => 
   } catch (error) {
     showToast(error.message);
   } finally {
-    await Promise.all([fetchBookings(), fetchPendingRequests()]);
+    await refreshAvailability();
     buttons.forEach(control => control.disabled = false);
   }
 });
@@ -633,7 +661,8 @@ async function insertBooking(booking) {
     if (!res.ok) {
       throw new Error(result.error || 'Could not save booking.');
     }
-    await fetchBookings();
+    notifyAvailabilityChanged();
+    await refreshAvailability();
     return { ok: true, emailSent: result.email_sent === true };
   } catch(e) {
     console.error('Insert error:', e);
@@ -648,6 +677,8 @@ async function deleteBooking(id) {
     if (!res.ok) throw new Error('Could not cancel booking.');
     allBookings = allBookings.filter(b => b.id !== id);
     renderAll();
+    notifyAvailabilityChanged();
+    await refreshAvailability();
     showToast('🗑️ Booking cancelled');
   } catch(e) {
     console.error('Delete error:', e);
@@ -681,6 +712,7 @@ function selectDate(d) {
   clearForm();
   renderAll();
   populateTimeDropdowns();
+  refreshAvailability();
 }
 
 // ═══ Render ═══
@@ -952,7 +984,8 @@ async function submitBooking() {
       clearForm(true);
       success.focus();
       showToast('Booking request submitted — awaiting admin approval');
-      await fetchBookings();
+      notifyAvailabilityChanged();
+      await refreshAvailability();
     } else {
       const result = await insertBooking(booking);
       if (result.ok) {
@@ -965,7 +998,7 @@ async function submitBooking() {
     }
   } catch (error) {
     showToast(error.message);
-    await fetchBookings();
+    await refreshAvailability();
   } finally {
     submittingBooking = false;
     btn.textContent = currentRole === 'public' ? 'Submit booking request' : 'Confirm booking';

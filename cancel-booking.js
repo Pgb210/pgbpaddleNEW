@@ -21,6 +21,11 @@
     status.textContent = 'Cancelling your booking…';
     try {
       const result = await send('cancel');
+      if (typeof BroadcastChannel === 'function') {
+        const channel = new BroadcastChannel('pgb-availability');
+        channel.postMessage('changed');
+        channel.close();
+      }
       details.hidden = true;
       document.querySelector('h1').textContent = 'Booking cancelled';
       status.textContent = result.email_sent
