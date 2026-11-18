@@ -12,4 +12,4 @@ export default async () => {
     await deliverCancellationNotice(notice);
   }
 };
-export const config: Config = { schedule: "*/10 * * * *" };
+export const config: Config = { schedule: "0 */6 * * *" };
